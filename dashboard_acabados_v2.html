@@ -97,7 +97,7 @@
       <div class="scroll">
         <table id="tbl"><thead></thead><tbody></tbody></table>
       </div>
-      <div class="legend">La celda de eficiencia se pinta verde ≥85%, ámbar 70–84%, rosa &lt;70%. El incentivo diario ya considera la curva y el básico de cada trabajador. La columna % Rechazo Audit. solo aplica a DOBLADO (viene de AUDITORIA DOB). Desde que la digitación pasó a ser por módulo (no por persona), las columnas de % Efic diario y Prendas de esta tabla pueden salir en 0 para trabajadores de módulos con 2+ integrantes — el incentivo en soles sigue siendo exacto. Para ver la producción real, usa la pestaña <b>POR MÓDULO</b>, que calcula la eficiencia ponderada real del módulo (no un promedio) directo desde GRUPOS.</div>
+      <div class="legend">La celda de eficiencia se pinta verde ≥85%, ámbar 70–84%, rosa &lt;70%. El incentivo diario ya considera la curva y el básico de cada trabajador. La columna % Rechazo Audit. solo aplica a DOBLADO (viene de AUDITORIA DOB). Desde que la digitación pasó a ser por módulo (no por persona), las columnas de % Efic diario y Prendas de esta tabla pueden salir en 0 para trabajadores de módulos con 2+ integrantes — el incentivo en soles sigue siendo exacto. Para ver la producción real por pareja/módulo, usa la pestaña <b>POR MÓDULO</b>. El <b>% Efic Sem</b> del módulo usa el mismo criterio que la vista individual (promedio de las eficiencias diarias, ya topadas), por eso una pareja de dos operarias al 77% da 77% y no un número inflado. La columna <b>Prendas total</b> suma producidas + rechazadas (las rechazadas solo existen en DOBLADO, vienen de AUDITORIA DOB).</div>
       <div class="legend" id="legend-exportar" style="margin-top:4px">"Exportar vista a Excel" descarga TODAS/PLANCHA/VAPOR/DOBLADO/ENCAJADO según la pestaña que tengas abierta arriba (no exporta la vista "POR MÓDULO", esa se ve solo en pantalla por ahora). El Excel trae 2 pestañas: <b>RESUMEN</b> (los números finales) y <b>REGISTROS</b> (lo que se digitó esa semana, ordenado y legible) — sirve de respaldo antes de limpiar datos del Sheet.</div>
     </div>
 
@@ -280,8 +280,8 @@ function renderHistorico(data) {
 
   const rows = data.rows || [];
   window._rows = rows;
-  window._pdasPorGrupo = {}; window._efPondPorGrupo = {};
-  (data.grupos || []).forEach(g => { window._pdasPorGrupo[g.grupo] = g.pdas; window._efPondPorGrupo[g.grupo] = g.efPond; });
+  window._pdasPorGrupo = {}; window._efPondPorGrupo = {}; window._rechPdasPorGrupo = {};
+  (data.grupos || []).forEach(g => { window._pdasPorGrupo[g.grupo] = g.pdas; window._efPondPorGrupo[g.grupo] = g.efPond; if (g.rech != null) window._rechPdasPorGrupo[g.grupo] = g.rech; });
 
   const fechaTxt = data.fechaInicio ? data.fechaInicio.split('-').reverse().join('/') : '';
   $('sub').innerHTML = `Semana ${data.semana} (${data.anio}) — archivada<br>Desde ${fechaTxt}`;
@@ -299,13 +299,17 @@ function renderHistorico(data) {
   const effDayAvg = (a, d) => { const b = byArea[a]; return b.dcount[d] > 0 ? b.daily[d] / b.dcount[d] : 0; };
   const effSimple = a => { const rs = rows.filter(r => r.area === a && r.efsem > 0); return rs.length ? rs.reduce((s, r) => s + r.efsem, 0) / rs.length : 0; };
 
-  let totInc = 0, totPdas = 0, totMp = 0, totMa = 0, totImp = 0, nOper = 0;
-  AREAS.forEach(a => { const b = byArea[a]; totInc += b.inc; totPdas += b.pdas; totMp += b.mprod; totMa += b.masist; totImp += b.improd; nOper += b.n; });
+  let totInc = 0, totMp = 0, totMa = 0, totImp = 0, nOper = 0;
+  AREAS.forEach(a => { const b = byArea[a]; totInc += b.inc; totMp += b.mprod; totMa += b.masist; totImp += b.improd; nOper += b.n; });
   const effGlobal = (totMa - totImp) > 0 ? totMp / (totMa - totImp) : 0;
+  const gruposUnicos = [...new Set(rows.map(r => r.grupo).filter(Boolean))];
+  let totProd = 0, totRech = 0;
+  gruposUnicos.forEach(gp => { totProd += (window._pdasPorGrupo[gp] || 0); totRech += (window._rechPdasPorGrupo[gp] || 0); });
+  const totPdas = totProd + totRech;
   const kpis = [
     { n: (effGlobal * 100).toFixed(0) + '%', l: 'Eficiencia acabados (ponderada)' },
     { n: 'S/ ' + totInc.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }), l: 'Incentivo total semana' },
-    { n: totPdas.toLocaleString('es-PE'), l: 'Prendas producidas' },
+    { n: totPdas.toLocaleString('es-PE'), l: (totRech > 0 ? 'Prendas totales (prod+rech)' : 'Prendas producidas') },
     { n: nOper, l: 'Trabajadores con actividad' },
   ];
   $('kpis').innerHTML = kpis.map(k => `<div class="kpi"><div class="n">${k.n}</div><div class="l">${k.l}</div></div>`).join('');
@@ -352,14 +356,16 @@ function render(data){
   // ---- % RECHAZO, Pdas Prod SEM y eficiencia ponderada real por módulo (desde GRUPOS)
   const rechazoPorGrupo={};
   const pdasPorGrupo={};
+  const rechPdasPorGrupo={};
   const efPondPorGrupo={};
   const MP_COLS=[3,12,21,30,39,48,57], MA_COLS=[4,13,22,31,40,49,58], IM_COLS=[5,14,23,32,41,50,59];
   if(gr){
     for(let i=3;i<gr.length;i++){
       const grupo=gr[i][0], area=gr[i][1];
       if(!grupo) continue;
-      pdasPorGrupo[grupo]=num(gr[i][67]); // BP, columna 68 (índice 67)
-      if(area==='DOBLADO') rechazoPorGrupo[grupo]=num(gr[i][69]); // BR, columna 70 (índice 69)
+      pdasPorGrupo[grupo]=num(gr[i][67]); // BP Pdas Prod SEM, columna 68 (índice 67)
+      rechPdasPorGrupo[grupo]=num(gr[i][68]); // BQ Pdas Rechazadas SEM, columna 69 (índice 68)
+      if(area==='DOBLADO') rechazoPorGrupo[grupo]=num(gr[i][69]); // BR % RECHAZO, columna 70 (índice 69)
       let mp=0,ma=0,im=0;
       MP_COLS.forEach(c=>mp+=num(gr[i][c]));
       MA_COLS.forEach(c=>ma+=num(gr[i][c]));
@@ -415,13 +421,19 @@ function render(data){
   const effSimple=a=>{const rs=rows.filter(r=>r.area===a&&r.efsem>0);return rs.length?rs.reduce((s,r)=>s+r.efsem,0)/rs.length:0;};
 
   // ---- KPIs
-  let totInc=0,totPdas=0,totMp=0,totMa=0,totImp=0,nOper=0;
-  AREAS.forEach(a=>{const b=byArea[a];totInc+=b.inc;totPdas+=b.pdas;totMp+=b.mprod;totMa+=b.masist;totImp+=b.improd;nOper+=b.n;});
+  let totInc=0,totMp=0,totMa=0,totImp=0,nOper=0;
+  AREAS.forEach(a=>{const b=byArea[a];totInc+=b.inc;totMp+=b.mprod;totMa+=b.masist;totImp+=b.improd;nOper+=b.n;});
   const effGlobal=(totMa-totImp)>0?totMp/(totMa-totImp):0;
+  // Prendas a nivel MÓDULO (cada grupo se cuenta una sola vez -> evita el doble conteo
+  // que había al sumar a cada integrante de una pareja/módulo por separado).
+  const gruposUnicos=[...new Set(rows.map(r=>r.grupo).filter(Boolean))];
+  let totProd=0,totRech=0;
+  gruposUnicos.forEach(gp=>{ totProd+=(pdasPorGrupo[gp]||0); totRech+=(rechPdasPorGrupo[gp]||0); });
+  const totPdas=totProd+totRech;
   const kpis=[
     {n:(effGlobal*100).toFixed(0)+'%',l:'Eficiencia acabados (ponderada)'},
     {n:'S/ '+totInc.toLocaleString('es-PE',{minimumFractionDigits:0,maximumFractionDigits:0}),l:'Incentivo total semana'},
-    {n:totPdas.toLocaleString('es-PE'),l:'Prendas producidas'},
+    {n:totPdas.toLocaleString('es-PE'),l:'Prendas totales (prod+rech)'},
     {n:nOper,l:'Trabajadores con actividad'},
   ];
   $('kpis').innerHTML=kpis.map(k=>`<div class="kpi"><div class="n">${k.n}</div><div class="l">${k.l}</div></div>`).join('');
@@ -450,6 +462,7 @@ function render(data){
   // ---- Tabla por trabajador con tabs
   window._rows=rows;
   window._pdasPorGrupo=pdasPorGrupo;
+  window._rechPdasPorGrupo=rechPdasPorGrupo;
   window._efPondPorGrupo=efPondPorGrupo;
   const tabs=['TODAS',...AREAS,'POR MÓDULO'];
   $('tabs').innerHTML=tabs.map((t,i)=>`<div class="tab ${i===0?'on':''}" data-a="${t}">${t}</div>`).join('');
@@ -469,8 +482,10 @@ function effColor(e){ if(e>=.85)return {bg:'#E3F2EE',fg:'#0E3B36'}; if(e>=.70)re
 
 function fillTable(area){
   const rows=window._rows.filter(r=>area==='TODAS'||r.area===area)
-    .sort((a,b)=>b.efsem-a.efsem);
-  const head=['Trabajador','Área','Grupo',...DAYS,'% Efic Sem','Prendas','Incent. S/','% Rechazo Audit.'];
+    .sort((a,b)=> a.area.localeCompare(b.area)
+      || String(a.grupo).localeCompare(String(b.grupo),'es',{numeric:true})
+      || b.efsem-a.efsem);
+  const head=['Trabajador','Área','Grupo',...DAYS,'% Efic Sem','Prendas total','Incent. S/','% Rechazo Audit.'];
   $('tbl').querySelector('thead').innerHTML='<tr>'+head.map((h,i)=>
     `<th class="${i>=3?'num':''}">${h}</th>`).join('')+'</tr>';
   $('tbl').querySelector('tbody').innerHTML=rows.map(r=>{
@@ -489,7 +504,7 @@ function fillTable(area){
       <td style="color:${STONE}">${r.grupo}</td>
       ${days}
       <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(r.efsem*100).toFixed(0)}%</td>
-      <td class="num">${r.pdas.toLocaleString('es-PE')}</td>
+      <td class="num">${(r.pdas + ((window._rechPdasPorGrupo&&window._rechPdasPorGrupo[r.grupo])||0)).toLocaleString('es-PE')}</td>
       <td class="num" style="font-weight:bold;color:${PETROLEO}">${r.inc.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       ${rechazoCell}
     </tr>`;
@@ -504,18 +519,21 @@ function fillTablaPorModulo(){
     if(!r.grupo) return;
     if(!grupos[r.grupo]) grupos[r.grupo]={grupo:r.grupo,area:r.area,integrantes:[],inc:0,
       pdas: (window._pdasPorGrupo && window._pdasPorGrupo[r.grupo]) || 0,
-      efPond: (window._efPondPorGrupo && window._efPondPorGrupo[r.grupo]) || 0,
+      rechPdas: (window._rechPdasPorGrupo && window._rechPdasPorGrupo[r.grupo]) || 0,
+      efSumSem:0, efCntSem:0,
       rechazo:r.rechazo};
     const g=grupos[r.grupo];
     g.integrantes.push(r.oper||r.cod);
     g.inc+=r.inc;
+    if(r.efsem>0){ g.efSumSem+=r.efsem; g.efCntSem++; }
   });
   const lista=Object.values(grupos).sort((a,b)=>a.area.localeCompare(b.area)||a.grupo.localeCompare(b.grupo));
 
-  const head=['Módulo/Pareja','Área','Integrantes','% Efic Sem (ponderada)','Prendas Prod','Incent. S/ (total grupo)','% Rechazo Audit.'];
+  const head=['Módulo/Pareja','Área','Integrantes','% Efic Sem','Prendas total','Incent. S/ (total grupo)','% Rechazo Audit.'];
   $('tbl').querySelector('thead').innerHTML='<tr>'+head.map((h,i)=>`<th class="${i>=3?'num':''}">${h}</th>`).join('')+'</tr>';
   $('tbl').querySelector('tbody').innerHTML=lista.map(g=>{
-    const cs=effColor(g.efPond);
+    const efMod = g.efCntSem>0 ? g.efSumSem/g.efCntSem : 0; // mismo criterio que la vista individual
+    const cs=effColor(efMod);
     const rechazoCell = (g.area==='DOBLADO' && g.rechazo!=null)
       ? `<td class="num" style="color:${g.rechazo>0.5?'#a33':'#333'};font-weight:${g.rechazo>0.5?'bold':'normal'}">${(g.rechazo*100).toFixed(0)}%</td>`
       : '<td class="num" style="color:#bbb">—</td>';
@@ -523,8 +541,8 @@ function fillTablaPorModulo(){
       <td style="font-weight:bold">${g.grupo}</td>
       <td><span class="tag" style="background:${areaColor(g.area)}">${g.area}</span></td>
       <td>${g.integrantes.join(' · ')}</td>
-      <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(g.efPond*100).toFixed(0)}%</td>
-      <td class="num">${g.pdas.toLocaleString('es-PE')}</td>
+      <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(efMod*100).toFixed(0)}%</td>
+      <td class="num">${(g.pdas + g.rechPdas).toLocaleString('es-PE')}</td>
       <td class="num" style="font-weight:bold;color:${PETROLEO}">${g.inc.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       ${rechazoCell}
     </tr>`;
