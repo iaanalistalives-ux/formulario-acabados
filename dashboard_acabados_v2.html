@@ -92,7 +92,7 @@
     </div>
 
     <div class="panel">
-      <h3>Detalle por trabajador <button class="refresh" id="btnExportar" style="float:right;background:var(--monetario);font-size:12px;padding:6px 12px">📥 Exportar vista a Excel</button></h3>
+      <h3>Detalle por trabajador <button class="refresh" id="btnExportar" style="float:right;background:var(--monetario);font-size:12px;padding:6px 12px">📥 Exportar vista a Excel</button><button class="refresh" id="btnExportarModulo" style="float:right;background:var(--esmeralda);font-size:12px;padding:6px 12px;margin-right:8px">📥 Por módulo (día×día)</button></h3>
       <div class="tabs" id="tabs"></div>
       <div class="scroll">
         <table id="tbl"><thead></thead><tbody></tbody></table>
@@ -188,6 +188,28 @@ $('btnExportar').addEventListener('click', () => {
     .finally(() => { btn.disabled = false; btn.textContent = '📥 Exportar vista a Excel'; });
 });
 
+$('btnExportarModulo').addEventListener('click', () => {
+  const btn = $('btnExportarModulo');
+  btn.disabled = true;
+  btn.textContent = 'Generando...';
+  fetch(URL_APPS_SCRIPT, { method: 'POST', body: JSON.stringify({ tipo: 'exportarModulosDiario' }) })
+    .then(r => r.json())
+    .then(res => {
+      if (!res.ok) { alert('No se pudo generar el Excel por módulo: ' + (res.error || '')); return; }
+      const bytes = atob(res.base64);
+      const arr = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      const blob = new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = res.archivo;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    })
+    .catch(() => alert('No se pudo generar el Excel por módulo. Puede tardar un poco la primera vez — intenta de nuevo.'))
+    .finally(() => { btn.disabled = false; btn.textContent = '📥 Por módulo (día×día)'; });
+});
+
 $('btnCerrarSemana').addEventListener('click', () => {
   const codigo = prompt('Código de administrador:');
   if (codigo !== 'LIVES2026') { if (codigo !== null) alert('Código incorrecto.'); return; }
@@ -277,6 +299,7 @@ function renderHistorico(data) {
   if (!data.ok) { err('No se pudo cargar esa semana: ' + (data.error || '')); return; }
   $('btnCerrarSemana').disabled = true;
   $('btnExportar').disabled = true;
+  $('btnExportarModulo').disabled = true;
 
   const rows = data.rows || [];
   window._rows = rows;
@@ -352,6 +375,7 @@ function render(data){
   $('avisoArchivo').classList.add('hidden');
   $('btnCerrarSemana').disabled = false;
   $('btnExportar').disabled = false;
+  $('btnExportarModulo').disabled = false;
   const ef=data.eficiencias, inc=data.incentivos, gr=data.grupos, par=data.parametros;
   if(!ef||!inc){err('El Sheet no devolvió EFICIENCIAS o INCENTIVOS. Revisa el backend.');return;}
 
