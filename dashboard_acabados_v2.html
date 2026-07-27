@@ -400,6 +400,19 @@ function render(data){
     }
   }
 
+  // ---- ACTIVO: mapa cód -> activo (columna F de TRABAJADORES).
+  // Solo aplica a la vista EN VIVO. Las semanas archivadas se leen de
+  // HISTORIAL_DIARIO, así que los inactivos siguen apareciendo en el
+  // historial de las semanas en que sí trabajaron.
+  const activoPorCod={};
+  const trab=data.trabajadores;
+  if(trab){
+    for(let i=1;i<trab.length;i++){
+      const c=trab[i][0];
+      if(c) activoPorCod[c]=String(trab[i][5]||'').trim().toUpperCase()==='SI';
+    }
+  }
+
   // ---- EFICIENCIAS: encabezados en fila índice 2 (fila 3 Excel), datos desde índice 3
   const TOT=4+7*4; // 32
   const COL={pdas:TOT, mprod:TOT+1, masist:TOT+2, improd:TOT+3, efsem:TOT+4, efpond:TOT+5};
@@ -408,6 +421,14 @@ function render(data){
     const cod=ef[i][0]; if(!cod) continue;
     const area=ef[i][2]||'';
     if(!AREAS.includes(area)) continue;
+    // Inactivo (columna ACTIVO = NO) se oculta SOLO si no PRODUJO nada esta
+    // semana. Si alcanzó a trabajar antes de salir, se sigue mostrando para
+    // que Lady pueda verificar su pago de esos días. Se mira producción, no
+    // asistencia: los inactivos suelen seguir apareciendo en el HO pegado.
+    if(activoPorCod[cod]===false){
+      const produjo = num(ef[i][COL.mprod])>0 || num(ef[i][COL.pdas])>0;
+      if(!produjo) continue;
+    }
     const daily=[]; for(let d=0;d<7;d++) daily.push(num(ef[i][4+d*4+3]));
     const grupo=ef[i][3]||'';
     rows.push({cod,oper:ef[i][1]||'',area,grupo,
