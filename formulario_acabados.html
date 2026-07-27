@@ -435,6 +435,12 @@
               <td class="res-dia">—</td><td class="res-dia">—</td><td class="res-dia">—</td><td class="res-dia">—</td>
               <td></td>
             </tr>
+            <tr id="fila-minutos-tabla">
+              <td colspan="3" style="text-align:right;font-weight:bold;font-size:12px;color:var(--gris)">Minutos (cant × STD):</td>
+              <td class="min-dia">—</td><td class="min-dia">—</td><td class="min-dia">—</td>
+              <td class="min-dia">—</td><td class="min-dia">—</td><td class="min-dia">—</td><td class="min-dia">—</td>
+              <td style="font-weight:bold" id="min-total-tabla">—</td>
+            </tr>
           </tfoot>
         </table>
       </div>
@@ -775,6 +781,16 @@
     for (let i = 1; i < stdTabla.length; i++) if (String(stdTabla[i][0]) === String(clave)) return stdTabla[i][5];
     return null;
   }
+  // Columna C = "T. TOTAL": el mismo STD que usa el backend para el botón
+  // "aleatorios y prorratear" (stdPorEstilo = stdTabla[s][2]) y que además
+  // está lleno para el 92% del catálogo (col F, "T. DOB/EMB", solo el 27%).
+  // Se usa para la entrada MANUAL de estilo en la tabla de prorrateo, para
+  // que ambos caminos (manual y aleatorio) tomen el mismo STD y no salga
+  // "—" en estilos que sí tienen un total válido.
+  function buscarPorEstiloColC(clave) {
+    for (let i = 1; i < stdTabla.length; i++) if (String(stdTabla[i][0]) === String(clave)) return stdTabla[i][2];
+    return null;
+  }
   function buscarPorEstiloColD(clave) {
     for (let i = 1; i < stdTabla.length; i++) if (String(stdTabla[i][0]) === String(clave)) return stdTabla[i][3];
     return null;
@@ -954,7 +970,10 @@
     const estiloInput = tr.querySelector('.pr-estilo');
     estiloInput.addEventListener('input', () => {
       const codigo = estiloInput.value.trim();
-      const std = buscarPorEstiloColF(codigo) ?? buscarClienteDob(codigo);
+      // Mismo STD que usa el botón aleatorio (T. TOTAL, col C) — antes esto
+      // tomaba T. DOB/EMB (col F), que está lleno solo para ~1 de cada 4
+      // estilos, dando "—" seguido aunque el estilo sí tuviera un STD válido.
+      const std = buscarPorEstiloColC(codigo) ?? buscarClienteDob(codigo);
       tr.querySelector('.pr-std').textContent = (std != null && std !== '') ? std : '—';
       tr.querySelector('.pr-cliente').textContent = buscarClientePorEstilo(codigo) || '—';
       // Si esta fila tiene una porcion de minutos asignada (vino del boton
@@ -978,6 +997,8 @@
     $('prorrateo-filas').innerHTML = '';
     for (let i = 0; i < 4; i++) agregarFilaProrrateo();
     document.querySelectorAll('#fila-resultado-tabla .res-dia').forEach(c => { c.textContent = '—'; c.className = 'res-dia'; });
+    document.querySelectorAll('#fila-minutos-tabla .min-dia').forEach(c => { c.textContent = '—'; });
+    $('min-total-tabla').textContent = '—';
     $('resultado-leyenda').textContent = '';
   }
   $('btn-agregar-estilo').addEventListener('click', agregarFilaProrrateo);
@@ -985,6 +1006,17 @@
 
   $('btn-aleatorio').addEventListener('click', () => {
     if (!objetivoModuloActual) { alert('Selecciona un módulo de DOBLADO primero (necesito su objetivo real para repartir los minutos).'); return; }
+    // Si ya hay cantidades cargadas (a mano o de una corrida anterior del
+    // botón), avisar antes de pisarlas — "prorratear" reemplaza TODAS las
+    // filas de la tabla.
+    const filasActuales = Array.from(document.querySelectorAll('#prorrateo-filas tr'));
+    const hayDatos = filasActuales.some(tr =>
+      tr.querySelector('.pr-estilo').value.trim() !== '' ||
+      Array.from(tr.querySelectorAll('.pr-cant')).some(inp => Number(inp.value) > 0));
+    if (hayDatos) {
+      const confirmado = confirm('Ya hay estilos y/o cantidades cargados en esta tabla.\n\nAl prorratear de nuevo se BORRAN y se reemplazan por un reparto aleatorio nuevo.\n\n¿Continuar de todas formas?');
+      if (!confirmado) return;
+    }
     const candidatos = (objetivoModuloActual.estilosUsados || []).filter(e => e.std > 0);
     if (candidatos.length === 0) {
       alert('Este módulo todavía no tiene estilos digitados en Producción esta semana — digita al menos uno ahí primero, o usa "+ Agregar estilo" para escribirlo a mano aquí.');
@@ -1097,6 +1129,14 @@
       celdas[i].textContent = (r.efic * 100).toFixed(0) + '%';
       celdas[i].className = 'res-dia ' + r.clase;
     });
+    // Fila de minutos: cantidad × STD por día (ej. 2.75×75 + 2.22×93 + ...), y el total semanal.
+    const celdasMin = document.querySelectorAll('#fila-minutos-tabla .min-dia');
+    let totalMinutos = 0;
+    resultados.forEach((r, i) => {
+      celdasMin[i].textContent = r.minutos > 0 ? r.minutos.toFixed(0) : '—';
+      totalMinutos += r.minutos;
+    });
+    $('min-total-tabla').textContent = totalMinutos > 0 ? totalMinutos.toFixed(0) : '—';
     $('resultado-leyenda').textContent = 'Verde = a menos de 3 puntos del objetivo, ámbar = hasta 8, rojo = más lejos. Ajusta las cantidades hasta que esta fila se acerque a la del objetivo real (arriba).';
   }
 
