@@ -390,6 +390,37 @@
       <div class="fila-objetivo" id="fila-incentivo-objetivo"></div>
     </div>
 
+    <div id="sistema-plancha" style="display:none">
+      <div class="prorrateo-tabla-wrap">
+        <table class="prorrateo-tabla" id="tabla-sistema-plancha">
+          <thead>
+            <tr><th style="text-align:left">Dato</th><th>LUN</th><th>MAR</th><th>MIÉ</th><th>JUE</th><th>VIE</th><th>SÁB</th><th>DOM</th><th>TOTAL</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="text-align:left;font-weight:bold">Min. Producidos</td>
+              <td class="pl-minprod">—</td><td class="pl-minprod">—</td><td class="pl-minprod">—</td>
+              <td class="pl-minprod">—</td><td class="pl-minprod">—</td><td class="pl-minprod">—</td><td class="pl-minprod">—</td>
+              <td class="pl-minprod-total" style="font-weight:bold">—</td>
+            </tr>
+            <tr>
+              <td style="text-align:left;font-weight:bold">Min. Improductivos</td>
+              <td class="pl-improd">—</td><td class="pl-improd">—</td><td class="pl-improd">—</td>
+              <td class="pl-improd">—</td><td class="pl-improd">—</td><td class="pl-improd">—</td><td class="pl-improd">—</td>
+              <td class="pl-improd-total" style="font-weight:bold">—</td>
+            </tr>
+            <tr>
+              <td style="text-align:left;font-weight:bold">Total Prendas</td>
+              <td class="pl-pdas">—</td><td class="pl-pdas">—</td><td class="pl-pdas">—</td>
+              <td class="pl-pdas">—</td><td class="pl-pdas">—</td><td class="pl-pdas">—</td><td class="pl-pdas">—</td>
+              <td class="pl-pdas-total" style="font-weight:bold">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="resultado-leyenda" id="leyenda-sistema-lectura">Estos números ya están guardados (vienen de lo digitado en Producción) — esta pantalla es solo para leer y pasar al sistema externo, aquí no se escribe nada.</div>
+    </div>
+
     <div id="sistema-doblado">
       <div class="prorrateo-tabla-wrap">
         <table class="prorrateo-tabla" id="prorrateo-tabla">
@@ -434,36 +465,6 @@
     </details>
     </div>
 
-    <div id="sistema-plancha" style="display:none">
-      <div class="prorrateo-tabla-wrap">
-        <table class="prorrateo-tabla" id="tabla-sistema-plancha">
-          <thead>
-            <tr><th style="text-align:left">Dato</th><th>LUN</th><th>MAR</th><th>MIÉ</th><th>JUE</th><th>VIE</th><th>SÁB</th><th>DOM</th><th>TOTAL</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style="text-align:left;font-weight:bold">Min. Producidos</td>
-              <td class="pl-minprod">—</td><td class="pl-minprod">—</td><td class="pl-minprod">—</td>
-              <td class="pl-minprod">—</td><td class="pl-minprod">—</td><td class="pl-minprod">—</td><td class="pl-minprod">—</td>
-              <td class="pl-minprod-total" style="font-weight:bold">—</td>
-            </tr>
-            <tr>
-              <td style="text-align:left;font-weight:bold">Min. Improductivos</td>
-              <td class="pl-improd">—</td><td class="pl-improd">—</td><td class="pl-improd">—</td>
-              <td class="pl-improd">—</td><td class="pl-improd">—</td><td class="pl-improd">—</td><td class="pl-improd">—</td>
-              <td class="pl-improd-total" style="font-weight:bold">—</td>
-            </tr>
-            <tr>
-              <td style="text-align:left;font-weight:bold">Total Prendas</td>
-              <td class="pl-pdas">—</td><td class="pl-pdas">—</td><td class="pl-pdas">—</td>
-              <td class="pl-pdas">—</td><td class="pl-pdas">—</td><td class="pl-pdas">—</td><td class="pl-pdas">—</td>
-              <td class="pl-pdas-total" style="font-weight:bold">—</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <div class="resultado-leyenda">Estos números ya están guardados (vienen de lo digitado en Producción) — esta pantalla es solo para leer y pasar al sistema externo, aquí no se escribe nada.</div>
-    </div>
   </section>
 
   <!-- RECHAZO -->
@@ -757,7 +758,13 @@
     document.querySelector('[data-tab="sistema"]').classList.toggle('oculto', !(esDoblado || esSoloLectura));
     document.querySelector('[data-tab="rechazo"]').classList.toggle('oculto', !esDoblado);
     $('sistema-doblado').style.display = esDoblado ? 'block' : 'none';
-    $('sistema-plancha').style.display = esSoloLectura ? 'block' : 'none';
+    // El cuadro de prendas/minutos por día ahora también se muestra en DOBLADO
+    // (antes solo en PLANCHA/VAPOR/ENCAJADO). En DOBLADO va ARRIBA del
+    // prorrateo, como referencia de lo ya digitado en Producción.
+    $('sistema-plancha').style.display = (esSoloLectura || esDoblado) ? 'block' : 'none';
+    $('leyenda-sistema-lectura').textContent = esDoblado
+      ? 'Resumen de lo ya digitado en Producción esta semana (solo lectura). El prorrateo para el sistema va más abajo.'
+      : 'Estos números ya están guardados (vienen de lo digitado en Producción) — esta pantalla es solo para leer y pasar al sistema externo, aquí no se escribe nada.';
     $('subcategoria-wrap').style.display = esPlancha ? 'block' : 'none';
     $('label-clave').textContent = esPlancha ? 'Estilo (número de prenda)' : 'Estilo (clave / categoría / cliente)';
     actualizarStd();
@@ -909,7 +916,7 @@
         $('fila-incentivo-objetivo').innerHTML = DIAS_PRORRATEO.map((d, i) =>
           `<span class="dia-obj">${d}: S/ ${res.dias[i].incentivo.toFixed(2)}</span>`).join('');
         if (area === 'DOBLADO') recalcularProrrateo();
-        if (area === 'PLANCHA' || area === 'VAPOR' || area === 'ENCAJADO') llenarTablaSistemaPlancha(res.dias);
+        llenarTablaSistemaPlancha(res.dias); // todas las áreas, DOBLADO incluido
       })
       .catch(() => {
         $('fila-objetivo').textContent = 'No se pudo conectar para traer el objetivo.';
@@ -918,6 +925,7 @@
   }
 
   function llenarTablaSistemaPlancha(dias) {
+    if (!dias || !dias.length) return;
     const celdasMin = document.querySelectorAll('#tabla-sistema-plancha .pl-minprod');
     const celdasImprod = document.querySelectorAll('#tabla-sistema-plancha .pl-improd');
     const celdasPdas = document.querySelectorAll('#tabla-sistema-plancha .pl-pdas');
