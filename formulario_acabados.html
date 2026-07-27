@@ -1247,7 +1247,10 @@
       .then(r => r.json())
       .then(res => {
         if (res.ok) {
-          mostrarAviso(tipo, res.aviso ? ('Guardado. ' + res.aviso) : 'Guardado.', !!res.aviso);
+          const mensajeGuardado = res.duplicadoEvitado
+            ? 'Guardado. (Ya se había registrado hace un momento — no se duplicó.)'
+            : (res.aviso ? ('Guardado. ' + res.aviso) : 'Guardado.');
+          mostrarAviso(tipo, mensajeGuardado, !!res.aviso);
           if (corrigiendo) {
             actualizarEnStorage(editando.hoja, editando.fila, etiqueta, payload);
             salirModoCorreccion();
