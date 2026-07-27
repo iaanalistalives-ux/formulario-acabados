@@ -520,6 +520,12 @@
   let stdTabla = [];
   let fechaInicioSemana = ''; // lunes de la semana activa, yyyy-MM-dd
   let objetivoModuloActual = null; // {dias:[{minAsist,efic}x7]} del módulo seleccionado
+  // 27-jul-2026: el prorrateo ya no se borra al cambiar de módulo/área. Se
+  // guarda en memoria (dura mientras la página siga abierta, no sobrevive un
+  // refresh) bajo la clave área+módulo, y se restaura tal cual si Lady vuelve
+  // a ese mismo módulo más tarde en la sesión.
+  let prorrateoGuardadoPorModulo = {};
+  let claveProrrateoActual = null;
   let contador = 0;
 
   const hoy = new Date();
@@ -541,6 +547,7 @@
         }
         fechaInicioSemana = data.fechaInicio || '';
         poblarModulos();
+        claveProrrateoActual = claveAreaModulo($('area').value, $('modulo').value); // punto de partida para la persistencia del prorrateo
         console.log('Catálogo cargado OK:', Object.keys(trabajadores).length, 'trabajadores,', stdTabla.length, 'filas STD');
       })
       .catch(err => {
@@ -740,10 +747,10 @@
   $('modulo').addEventListener('change', () => {
     salirModoEdicion();
     mostrarIntegrantesAutomaticos();
-    reiniciarProrrateo(); // evita arrastrar estilos/cantidades del módulo anterior
+    cambiarContextoProrrateo(); // antes: reiniciarProrrateo() -- ahora conserva el prorrateo del módulo anterior
     if (document.querySelector('[data-tab="sistema"]').classList.contains('activo')) cargarObjetivoModulo();
   });
-  $('area').addEventListener('change', reiniciarProrrateo);
+  $('area').addEventListener('change', cambiarContextoProrrateo);
   reiniciarColaboradoresMini();
   const tabs = document.querySelectorAll('nav.tabs button');
   tabs.forEach(btn => {
@@ -1000,6 +1007,54 @@
     document.querySelectorAll('#fila-minutos-tabla .min-dia').forEach(c => { c.textContent = '—'; });
     $('min-total-tabla').textContent = '—';
     $('resultado-leyenda').textContent = '';
+  }
+
+  // --- Persistencia del prorrateo al navegar entre módulos (27-jul-2026) ---
+  function claveAreaModulo(area, modulo) { return (area || '') + '||' + (modulo || ''); }
+
+  function capturarProrrateoActual() {
+    return Array.from(document.querySelectorAll('#prorrateo-filas tr')).map(tr => ({
+      estilo: tr.querySelector('.pr-estilo').value.trim(),
+      std: tr.querySelector('.pr-std').textContent,
+      cantidades: Array.from(tr.querySelectorAll('.pr-cant')).map(inp => inp.value)
+    }));
+  }
+
+  function hayContenidoProrrateo(filas) {
+    return filas.some(f => f.estilo || f.cantidades.some(c => c !== ''));
+  }
+
+  // Reemplaza reiniciarProrrateo() en los cambios de área/módulo: si el
+  // módulo al que se vuelve tenía algo cargado, lo restaura tal cual estaba
+  // (mismos estilos y cantidades por día); si nunca se tocó, arranca vacío
+  // igual que antes.
+  function restaurarOReiniciarProrrateo(filasGuardadas) {
+    $('prorrateo-filas').innerHTML = '';
+    if (filasGuardadas && filasGuardadas.length) {
+      filasGuardadas.forEach(f => {
+        const stdNum = parseFloat(f.std);
+        const tr = crearFilaProrrateo(f.estilo, isNaN(stdNum) ? null : stdNum, null);
+        tr.querySelectorAll('.pr-cant').forEach((inp, i) => { inp.value = f.cantidades[i] || ''; });
+        $('prorrateo-filas').appendChild(tr);
+      });
+    } else {
+      for (let i = 0; i < 4; i++) agregarFilaProrrateo();
+    }
+    document.querySelectorAll('#fila-resultado-tabla .res-dia').forEach(c => { c.textContent = '—'; c.className = 'res-dia'; });
+    document.querySelectorAll('#fila-minutos-tabla .min-dia').forEach(c => { c.textContent = '—'; });
+    $('min-total-tabla').textContent = '—';
+    $('resultado-leyenda').textContent = '';
+    recalcularProrrateo(); // recalcula % y minutos con lo restaurado, en vez de dejarlo en "—"
+  }
+
+  function cambiarContextoProrrateo() {
+    if (claveProrrateoActual) {
+      const actuales = capturarProrrateoActual();
+      if (hayContenidoProrrateo(actuales)) prorrateoGuardadoPorModulo[claveProrrateoActual] = actuales;
+      else delete prorrateoGuardadoPorModulo[claveProrrateoActual];
+    }
+    claveProrrateoActual = claveAreaModulo($('area').value, $('modulo').value);
+    restaurarOReiniciarProrrateo(prorrateoGuardadoPorModulo[claveProrrateoActual]);
   }
   $('btn-agregar-estilo').addEventListener('click', agregarFilaProrrateo);
   for (let i = 0; i < 4; i++) agregarFilaProrrateo(); // arranca con 4 filas, como el ejemplo
