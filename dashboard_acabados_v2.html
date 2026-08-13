@@ -290,9 +290,15 @@ function renderHistorico(data) {
 
   const byArea = {};
   AREAS.forEach(a => byArea[a] = { mprod: 0, masist: 0, improd: 0, inc: 0, pdas: 0, n: 0, daily: Array(7).fill(0), dcount: Array(7).fill(0) });
+  // 12-ago-2026: mprod/masist/improd vienen de data.porArea (agregado por
+  // MÓDULO en el backend, sin duplicar entre integrantes de una pareja).
+  // Antes se sumaban sumando cada fila (persona), pero esas columnas nunca
+  // tuvieron un dato real por persona -- por eso "areasActivas" salía
+  // vacío y los 3 gráficos se veían en blanco.
+  AREAS.forEach(a => { const pa = (data.porArea || {})[a]; if (pa) { byArea[a].mprod = pa.mprod; byArea[a].masist = pa.masist; byArea[a].improd = pa.improd; } });
   rows.forEach(r => {
     const b = byArea[r.area]; if (!b) return;
-    b.mprod += r.mprod; b.masist += r.masist; b.improd += r.improd; b.inc += r.inc; b.pdas += r.pdas; b.n++;
+    b.inc += r.inc; b.pdas += r.pdas; b.n++;
     r.daily.forEach((v, d) => { if (v > 0) { b.daily[d] += v; b.dcount[d]++; } });
   });
   const effPond = a => { const b = byArea[a]; const den = b.masist - b.improd; return den > 0 ? b.mprod / den : 0; };
