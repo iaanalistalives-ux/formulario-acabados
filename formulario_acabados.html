@@ -590,6 +590,26 @@
 
 <footer>Confidencial — Uso Interno · LIVES</footer>
 
+<!-- Modal de corrección: aislado del formulario principal, campos propios.
+     13-ago-2026: bug real encontrado -- este bloque vivía después del
+     bloque de código, así que cuando el código intentaba conectarle los
+     botones todavía no existía en la página -- eso rompía con un error y
+     frenaba TODO lo que venía después en el código (por eso "Buscar" y el
+     cambio de fecha dejaron de reaccionar por completo). Ahora va antes,
+     para que ya exista cuando el código lo necesita. -->
+<div class="modal-fondo" id="modal-correccion">
+  <div class="modal-caja">
+    <div class="modal-titulo" id="modal-titulo">Corregir registro</div>
+    <div class="modal-subtitulo" id="modal-subtitulo"></div>
+    <div id="modal-campos"></div>
+    <div class="aviso" id="modal-aviso"></div>
+    <div class="modal-botones">
+      <button type="button" id="modal-btn-cancelar" style="background:#fff;color:var(--petroleo);border:1px solid #d8dede;border-radius:8px;font-weight:bold;padding:12px;cursor:pointer">Cancelar</button>
+      <button type="button" class="guardar" id="modal-btn-guardar">Guardar corrección</button>
+    </div>
+  </div>
+</div>
+
 <script>
   // ⚠️ Pegar aquí la URL del Web App de Apps Script tras desplegarlo
   const URL_APPS_SCRIPT = 'https://script.google.com/macros/s/AKfycbx_RVCdk3GSyPjTRCxRDsIcSELk1bAMyDK2khgSZGPoPVrTwxYHFXRd_TspcnpbabvNFg/exec';
@@ -1853,19 +1873,5 @@
   $('btn-buscar').addEventListener('click', buscarYActualizar);
   renderizarLista();
 </script>
-
-  <!-- Modal de corrección: aislado del formulario principal, campos propios -->
-  <div class="modal-fondo" id="modal-correccion">
-    <div class="modal-caja">
-      <div class="modal-titulo" id="modal-titulo">Corregir registro</div>
-      <div class="modal-subtitulo" id="modal-subtitulo"></div>
-      <div id="modal-campos"></div>
-      <div class="aviso" id="modal-aviso"></div>
-      <div class="modal-botones">
-        <button type="button" id="modal-btn-cancelar" style="background:#fff;color:var(--petroleo);border:1px solid #d8dede;border-radius:8px;font-weight:bold;padding:12px;cursor:pointer">Cancelar</button>
-        <button type="button" class="guardar" id="modal-btn-guardar">Guardar corrección</button>
-      </div>
-    </div>
-  </div>
 </body>
 </html>
