@@ -37,7 +37,22 @@
     background: var(--esmeralda); color: #fff; text-decoration: none;
     padding: 8px 14px; border-radius: 6px; font-size: 13px; font-weight: bold; white-space: nowrap;
   }
-  main { max-width: 640px; margin: 0 auto; padding: 16px; }
+  main { max-width: 1300px; margin: 0 auto; padding: 16px; }
+
+  /* 13-ago-2026: Producción y el resumen de Sistema son ambos compactos --
+     van en dos columnas parejas. La tabla de prorrateo (solo DOBLADO) NO
+     entra en esta grilla: tiene 7 columnas de días y se ve mal encajada en
+     una columna angosta, así que va debajo, a todo el ancho, donde sí
+     aprovecha el espacio sin dejar cajas a medio llenar. */
+  .grid-formulario {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .grid-formulario { grid-template-columns: 1fr; }
+  }
 
   .barra-fecha {
     background: #fff;
@@ -188,6 +203,11 @@
     gap: 6px;
     margin-bottom: 14px;
     overflow-x: auto;
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #F1F6F4;
+    padding: 8px 0;
   }
   nav.tabs button {
     flex: 1;
@@ -202,11 +222,7 @@
     cursor: pointer;
     border: 1px solid #d8dede;
   }
-  nav.tabs button.activo {
-    background: var(--petroleo);
-    color: #fff;
-    border-color: var(--petroleo);
-  }
+  nav.tabs button:hover { background: var(--petroleo); color: #fff; border-color: var(--petroleo); }
   nav.tabs button.oculto { display: none; }
 
   .panel {
@@ -214,9 +230,55 @@
     border-radius: 10px;
     padding: 16px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    display: none;
+    margin-bottom: 18px;
+    scroll-margin-top: 64px; /* para que el scroll-to no la deje tapada por la barra fija */
   }
-  .panel.activo { display: block; }
+  .panel-titulo {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--petroleo);
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #eef2f1;
+  }
+
+  /* 12-ago-2026: modal de corrección -- aislado del formulario principal a
+     propósito, para no pisar lo que Lady tenga a medio llenar en otro lado. */
+  .modal-fondo {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(14,59,54,0.55);
+    z-index: 100;
+    align-items: center; justify-content: center;
+    padding: 16px;
+  }
+  .modal-fondo.abierto { display: flex; }
+  .modal-caja {
+    background: #fff;
+    border-radius: 12px;
+    max-width: 420px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 18px;
+  }
+  .modal-titulo {
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--petroleo);
+    margin-bottom: 4px;
+  }
+  .modal-subtitulo {
+    font-size: 12px;
+    color: var(--gris);
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eef2f1;
+  }
+  .modal-botones {
+    display: flex; gap: 8px; margin-top: 14px;
+  }
+  .modal-botones button { flex: 1; }
 
   .campo-grupo { margin-bottom: 12px; }
   .campo-grupo label { font-size: 13px; color: var(--gris); display: block; margin-bottom: 4px; }
@@ -332,13 +394,16 @@
   </div>
 
   <nav class="tabs">
-    <button data-tab="produccion" class="activo">Producción</button>
-    <button data-tab="sistema" class="oculto">Sistema</button>
-    <button data-tab="rechazo" class="oculto">Rechazo</button>
+    <button data-tab="produccion" type="button">↓ Producción</button>
+    <button data-tab="sistema" type="button">↓ Sistema</button>
+    <button data-tab="prorrateo" class="oculto" type="button">↓ Prorrateo</button>
+    <button data-tab="rechazo" class="oculto" type="button">↓ Rechazo</button>
   </nav>
 
+  <div class="grid-formulario">
   <!-- PRODUCCIÓN POR MÓDULO (unifica cantidad + improductivos, total del módulo) -->
-  <section class="panel activo" id="panel-produccion">
+  <section class="panel" id="panel-produccion">
+    <div class="panel-titulo">Producción</div>
     <div class="campo-grupo">
       <label id="label-clave">Estilo (número de prenda)</label>
       <input type="text" id="p-clave" placeholder="Ej: 25175" inputmode="numeric">
@@ -380,6 +445,7 @@
 
   <!-- SISTEMA DOB -->
   <section class="panel" id="panel-sistema">
+    <div class="panel-titulo">Sistema</div>
     <div class="objetivo-box" id="objetivo-box">
       <div class="label" id="modulo-integrantes-sistema" style="font-size:12px;font-weight:bold;color:var(--petroleo);margin-bottom:6px">—</div>
       <div class="label">Resultado por persona en la fecha seleccionada</div>
@@ -420,7 +486,14 @@
       </div>
       <div class="resultado-leyenda" id="leyenda-sistema-lectura">Estos números ya están guardados (vienen de lo digitado en Producción) — esta pantalla es solo para leer y pasar al sistema externo, aquí no se escribe nada.</div>
     </div>
+  </section>
+  </div>
 
+  <!-- PRORRATEO (solo DOBLADO) -- aparte de "Sistema" y a todo el ancho a
+       propósito: tiene 7 columnas de días y se ve mal encajada en una
+       columna angosta junto a Producción. -->
+  <section class="panel" id="panel-prorrateo" style="display:none">
+    <div class="panel-titulo">Prorrateo para Sistema</div>
     <div id="sistema-doblado">
       <div class="prorrateo-tabla-wrap">
         <table class="prorrateo-tabla" id="prorrateo-tabla">
@@ -475,6 +548,7 @@
 
   <!-- RECHAZO -->
   <section class="panel" id="panel-rechazo">
+    <div class="panel-titulo">Rechazo</div>
     <div class="campo-grupo">
       <label>Cliente</label>
       <select id="r-cliente"><option value="">-- Selecciona --</option></select>
@@ -748,19 +822,20 @@
     salirModoEdicion();
     mostrarIntegrantesAutomaticos();
     cambiarContextoProrrateo(); // antes: reiniciarProrrateo() -- ahora conserva el prorrateo del módulo anterior
-    if (document.querySelector('[data-tab="sistema"]').classList.contains('activo')) cargarObjetivoModulo();
+    cargarObjetivoModulo(); // 12-ago-2026: Sistema ya siempre está visible, se refresca solo
   });
   $('area').addEventListener('change', cambiarContextoProrrateo);
   reiniciarColaboradoresMini();
+  // 12-ago-2026: las 3 secciones ya no se ocultan entre sí -- están todas
+  // visibles, una tras otra. Estos botones ahora solo hacen scroll directo
+  // a su sección (acceso rápido), sin esconder las demás.
   const tabs = document.querySelectorAll('nav.tabs button');
+  function irASeccion(tab) {
+    const panel = document.getElementById('panel-' + tab);
+    if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   tabs.forEach(btn => {
-    btn.addEventListener('click', () => {
-      tabs.forEach(b => b.classList.remove('activo'));
-      btn.classList.add('activo');
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('activo'));
-      document.getElementById('panel-' + btn.dataset.tab).classList.add('activo');
-      if (btn.dataset.tab === 'sistema') cargarObjetivoModulo();
-    });
+    btn.addEventListener('click', () => irASeccion(btn.dataset.tab));
   });
 
   function actualizarPestanasPorArea() {
@@ -768,15 +843,17 @@
     const esPlancha = $('area').value === 'PLANCHA';
     const esVaporOEncajado = $('area').value === 'VAPOR' || $('area').value === 'ENCAJADO';
     const esSoloLectura = esPlancha || esVaporOEncajado;
-    document.querySelector('[data-tab="sistema"]').classList.toggle('oculto', !(esDoblado || esSoloLectura));
     document.querySelector('[data-tab="rechazo"]').classList.toggle('oculto', !esDoblado);
+    document.querySelector('[data-tab="prorrateo"]').classList.toggle('oculto', !esDoblado);
+    $('panel-rechazo').style.display = esDoblado ? 'block' : 'none'; // antes solo se ocultaba el botón de la pestaña; ahora el panel también, porque ya no hay pestañas que lo tapen
+    $('panel-prorrateo').style.display = esDoblado ? 'block' : 'none';
     $('sistema-doblado').style.display = esDoblado ? 'block' : 'none';
     // El cuadro de prendas/minutos por día ahora también se muestra en DOBLADO
-    // (antes solo en PLANCHA/VAPOR/ENCAJADO). En DOBLADO va ARRIBA del
-    // prorrateo, como referencia de lo ya digitado en Producción.
+    // (antes solo en PLANCHA/VAPOR/ENCAJADO). Vive en "Sistema" (compacto);
+    // el prorrateo, que sí necesita ancho, tiene su propia sección aparte.
     $('sistema-plancha').style.display = (esSoloLectura || esDoblado) ? 'block' : 'none';
     $('leyenda-sistema-lectura').textContent = esDoblado
-      ? 'Resumen de lo ya digitado en Producción esta semana (solo lectura). El prorrateo para el sistema va más abajo.'
+      ? 'Resumen de lo ya digitado en Producción esta semana (solo lectura). El prorrateo para el sistema está en la sección de abajo.'
       : 'Estos números ya están guardados (vienen de lo digitado en Producción) — esta pantalla es solo para leer y pasar al sistema externo, aquí no se escribe nada.';
     $('subcategoria-wrap').style.display = esPlancha ? 'block' : 'none';
     $('label-clave').textContent = esPlancha ? 'Estilo (número de prenda)' : 'Estilo (clave / categoría / cliente)';
@@ -1235,8 +1312,6 @@
   });
 
   let entradasGuardadas = {}; // 'HOJA_fila' -> payload usado para guardar, para poder "Corregir"
-  let editando = null; // {hoja, fila, tipo} cuando se está corrigiendo una fila existente
-
   function guardar(tipo, btn) {
     const fecha = $('fecha').value;
     const area = $('area').value;
@@ -1287,16 +1362,9 @@
       etiqueta = `${modulo} · ${cliente} · ${cant} rechazadas`;
     }
 
-    const corrigiendo = editando && editando.tipo === tipo;
-    if (corrigiendo) {
-      payload.tipo = 'actualizarFila';
-      payload.hoja = editando.hoja;
-      payload.fila = editando.fila;
-    }
-
     btn.disabled = true;
     const textoOriginal = btn.textContent;
-    btn.textContent = corrigiendo ? 'Guardando corrección...' : 'Guardando...';
+    btn.textContent = 'Guardando...';
 
     fetch(URL_APPS_SCRIPT, { method: 'POST', body: JSON.stringify(payload) })
       .then(r => r.json())
@@ -1306,12 +1374,7 @@
             ? 'Guardado. (Ya se había registrado hace un momento — no se duplicó.)'
             : (res.aviso ? ('Guardado. ' + res.aviso) : 'Guardado.');
           mostrarAviso(tipo, mensajeGuardado, !!res.aviso);
-          if (corrigiendo) {
-            actualizarEnStorage(editando.hoja, editando.fila, etiqueta, payload);
-            salirModoCorreccion();
-          } else if (res.hoja && res.fila) {
-            guardarEnStorage({ tipo, etiqueta, hoja: res.hoja, fila: res.fila, payload });
-          }
+          if (res.hoja && res.fila) guardarEnStorage({ tipo, etiqueta, hoja: res.hoja, fila: res.fila, payload });
           renderizarLista();
           limpiarFormulario(tipo);
         } else {
@@ -1321,63 +1384,131 @@
       .catch(() => mostrarAviso(tipo, 'No se confirmó la respuesta (puede tardar la primera vez). Antes de reintentar, revisa el Sheet — quizá sí se guardó y reintentar duplicaría la fila.', true))
       .finally(() => {
         btn.disabled = false;
-        btn.textContent = editando ? 'Guardar corrección' : textoOriginal;
+        btn.textContent = textoOriginal;
       });
   }
 
-  function entrarModoCorreccion(tipo, hoja, fila) {
+  // 12-ago-2026: la corrección ahora es un modal aparte, con sus propios
+  // campos -- ya NO toca fecha/área/módulo ni los campos del formulario
+  // principal. Antes, corregir un registro viejo sobreescribía en silencio
+  // lo que Lady tuviera a medio llenar para una entrada nueva en otro
+  // módulo/fecha; con el modal aislado eso ya no puede pasar.
+  let modalCorrigiendo = null; // {hoja, fila, tipo}
+
+  function abrirModalCorreccion(tipo, hoja, fila, resumenTexto) {
     const guardado = entradasGuardadas[hoja + '_' + fila];
     if (!guardado) { alert('No tengo los datos originales de esta fila (se perdieron al recargar la página). Ábrela directo en el Sheet para corregirla.'); return; }
-    editando = { hoja, fila, tipo };
+    modalCorrigiendo = { hoja, fila, tipo };
     const p = guardado.payload;
-    $('fecha').value = p.fecha;
-    $('area').value = p.area;
-    actualizarPestanasPorArea();
-    poblarModulos();
-    $('modulo').value = p.modulo;
-    salirModoEdicion();
-    mostrarIntegrantesAutomaticos();
+    const TITULOS = { produccionModulo: 'Corregir producción', sistema: 'Corregir producción (sistema)', rechazo: 'Corregir rechazo' };
+    $('modal-titulo').textContent = TITULOS[tipo] || 'Corregir registro';
+    $('modal-subtitulo').textContent = (resumenTexto || '') + ` — Módulo ${p.modulo}, ${p.fecha}`;
+    $('modal-aviso').className = 'aviso';
+    $('modal-aviso').textContent = '';
+
+    let camposHtml = '';
     if (tipo === 'produccionModulo') {
-      document.querySelector('[data-tab="produccion"]').click();
-      $('p-clave').value = p.clave || '';
-      $('p-subcategoria').value = p.subcategoria || '';
-      $('p-cant').value = p.cant || '';
-      $('p-std').value = p.stdManual || '';
-      $('p-improd').value = p.improd || '';
-      $('p-apoyo').value = p.apoyo || '';
-      actualizarStd();
-      document.querySelector('[data-tipo="produccionModulo"]').textContent = 'Guardar corrección';
+      camposHtml = `
+        <div class="campo-grupo"><label>Estilo</label><input type="text" id="modal-p-clave" value="${p.clave || ''}"></div>
+        ${p.area === 'PLANCHA' ? `<div class="campo-grupo"><label>Subcategoría (R/A/B/C)</label><input type="text" id="modal-p-subcategoria" value="${p.subcategoria || ''}"></div>` : ''}
+        <div class="campo-grupo"><label>Cantidad</label><input type="number" id="modal-p-cant" value="${p.cant || ''}"></div>
+        <div class="campo-grupo"><label>STD manual (opcional)</label><input type="number" step="0.01" id="modal-p-std" value="${p.stdManual || ''}"></div>
+        <div class="fila-doble">
+          <div class="campo-grupo"><label>Min improductivos</label><input type="number" id="modal-p-improd" value="${p.improd || ''}"></div>
+          <div class="campo-grupo"><label>Min apoyo</label><input type="number" id="modal-p-apoyo" value="${p.apoyo || ''}"></div>
+        </div>`;
     } else if (tipo === 'sistema') {
-      document.querySelector('[data-tab="sistema"]').click();
-      $('s-estilo').value = p.estilo || '';
-      $('s-cant').value = p.cant || '';
-      document.querySelector('[data-tipo="sistema"]').textContent = 'Guardar corrección';
+      camposHtml = `
+        <div class="campo-grupo"><label>Estilo</label><input type="text" id="modal-s-estilo" value="${p.estilo || ''}"></div>
+        <div class="campo-grupo"><label>Cantidad</label><input type="number" id="modal-s-cant" value="${p.cant || ''}"></div>`;
     } else if (tipo === 'rechazo') {
-      document.querySelector('[data-tab="rechazo"]').click();
-      $('r-cliente').value = p.cliente || '';
-      $('r-cant').value = p.cant || '';
-      $('r-improd').value = p.improd || '';
-      $('r-apoyo').value = p.apoyo || '';
-      actualizarStdRechazo();
-      document.querySelector('[data-tipo="rechazo"]').textContent = 'Guardar corrección';
+      camposHtml = `
+        <div class="campo-grupo"><label>Cliente</label><input type="text" id="modal-r-cliente" value="${p.cliente || ''}"></div>
+        <div class="campo-grupo"><label>Prendas rechazadas</label><input type="number" id="modal-r-cant" value="${p.cant || ''}"></div>
+        <div class="fila-doble">
+          <div class="campo-grupo"><label>Min improductivos</label><input type="number" id="modal-r-improd" value="${p.improd || ''}"></div>
+          <div class="campo-grupo"><label>Min apoyo</label><input type="number" id="modal-r-apoyo" value="${p.apoyo || ''}"></div>
+        </div>`;
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    $('modal-campos').innerHTML = camposHtml;
+    $('modal-correccion').classList.add('abierto');
   }
 
-  function salirModoCorreccion() {
-    editando = null;
-    document.querySelectorAll('button.guardar').forEach(b => {
-      if (b.textContent === 'Guardar corrección') {
-        const textos = { produccionModulo: 'Guardar producción del módulo', sistema: 'Agregar producción sistema', rechazo: 'Agregar rechazo' };
-        b.textContent = textos[b.dataset.tipo];
-      }
-    });
+  function cerrarModalCorreccion() {
+    modalCorrigiendo = null;
+    $('modal-correccion').classList.remove('abierto');
+    $('modal-campos').innerHTML = '';
   }
 
-  function actualizarItemLista(hoja, fila, etiqueta, tipo) {
-    const item = document.querySelector(`.item-hoy[data-hoja="${hoja}"][data-fila="${fila}"]`);
-    if (item) item.querySelector('.texto-item').innerHTML = `${etiqueta}<span class="tipo"> · ${tipo} (corregido)</span>`;
+  function guardarCorreccionModal() {
+    if (!modalCorrigiendo) return;
+    const { hoja, fila, tipo } = modalCorrigiendo;
+    const guardado = entradasGuardadas[hoja + '_' + fila];
+    const p = guardado.payload;
+    let payload = { tipo: 'actualizarFila', hoja, fila, fecha: p.fecha, area: p.area, modulo: p.modulo, semana: p.semana };
+    let etiqueta = '';
+
+    if (tipo === 'produccionModulo') {
+      const clave = $('modal-p-clave').value.trim();
+      const cant = $('modal-p-cant').value;
+      if (!clave || !cant) { mostrarAvisoModal('Completa estilo y cantidad.'); return; }
+      payload.clave = clave;
+      payload.subcategoria = $('modal-p-subcategoria') ? $('modal-p-subcategoria').value.trim() : (p.subcategoria || '');
+      payload.cant = Number(cant);
+      payload.stdManual = $('modal-p-std').value ? Number($('modal-p-std').value) : '';
+      payload.improd = $('modal-p-improd').value ? Number($('modal-p-improd').value) : '';
+      payload.apoyo = $('modal-p-apoyo').value ? Number($('modal-p-apoyo').value) : '';
+      etiqueta = `Módulo ${p.modulo} · ${cant} pdas · estilo ${clave}`;
+    } else if (tipo === 'sistema') {
+      const estilo = $('modal-s-estilo').value.trim();
+      const cant = $('modal-s-cant').value;
+      if (!estilo || !cant) { mostrarAvisoModal('Completa estilo y cantidad.'); return; }
+      payload.estilo = estilo;
+      payload.cant = Number(cant);
+      etiqueta = `${p.modulo} · ${estilo} · ${cant} pdas (sistema)`;
+    } else if (tipo === 'rechazo') {
+      const cliente = $('modal-r-cliente').value.trim();
+      const cant = $('modal-r-cant').value;
+      if (!cliente || !cant) { mostrarAvisoModal('Completa cliente y cantidad.'); return; }
+      payload.cliente = cliente;
+      payload.cant = Number(cant);
+      payload.improd = $('modal-r-improd').value ? Number($('modal-r-improd').value) : '';
+      payload.apoyo = $('modal-r-apoyo').value ? Number($('modal-r-apoyo').value) : '';
+      etiqueta = `${p.modulo} · ${cliente} · ${cant} rechazadas`;
+    }
+
+    const btn = $('modal-btn-guardar');
+    btn.disabled = true;
+    const textoOriginal = btn.textContent;
+    btn.textContent = 'Guardando corrección...';
+
+    fetch(URL_APPS_SCRIPT, { method: 'POST', body: JSON.stringify(payload) })
+      .then(r => r.json())
+      .then(res => {
+        if (res.ok) {
+          actualizarEnStorage(hoja, fila, etiqueta, payload);
+          renderizarLista();
+          cerrarModalCorreccion();
+        } else {
+          mostrarAvisoModal(res.error || 'Error al guardar.');
+        }
+      })
+      .catch(() => mostrarAvisoModal('No se confirmó la respuesta (puede tardar la primera vez). Revisa el Sheet antes de reintentar.'))
+      .finally(() => {
+        btn.disabled = false;
+        btn.textContent = textoOriginal;
+      });
   }
+
+  function mostrarAvisoModal(mensaje) {
+    const div = $('modal-aviso');
+    div.textContent = mensaje;
+    div.className = 'aviso error';
+  }
+
+  $('modal-btn-cancelar').addEventListener('click', cerrarModalCorreccion);
+  $('modal-btn-guardar').addEventListener('click', guardarCorreccionModal);
+  $('modal-correccion').addEventListener('click', (e) => { if (e.target.id === 'modal-correccion') cerrarModalCorreccion(); });
 
   function mostrarAviso(tipo, mensaje, esError) {
     const div = document.getElementById('aviso-' + tipo);
@@ -1435,7 +1566,7 @@
     if (hoja && fila) entradasGuardadas[hoja + '_' + fila] = { tipo, payload };
 
     const btnCorregir = div.querySelector('.corregir-item');
-    if (btnCorregir) btnCorregir.addEventListener('click', () => entrarModoCorreccion(tipo, hoja, fila));
+    if (btnCorregir) btnCorregir.addEventListener('click', () => abrirModalCorreccion(tipo, hoja, fila, etiqueta));
 
     const btnQuitar = div.querySelector('.quitar-item');
     if (btnQuitar) {
@@ -1564,12 +1695,25 @@
   $('fecha').addEventListener('change', () => {
     renderizarLista();
     mostrarIntegrantesAutomaticos();
-    if (document.querySelector('[data-tab="sistema"]').classList.contains('activo')) cargarObjetivoModulo();
+    cargarObjetivoModulo(); // 12-ago-2026: Sistema ya siempre está visible, se refresca solo
   });
   $('area').addEventListener('change', renderizarLista);
   $('modulo').addEventListener('change', renderizarLista);
   renderizarLista();
 </script>
 
+  <!-- Modal de corrección: aislado del formulario principal, campos propios -->
+  <div class="modal-fondo" id="modal-correccion">
+    <div class="modal-caja">
+      <div class="modal-titulo" id="modal-titulo">Corregir registro</div>
+      <div class="modal-subtitulo" id="modal-subtitulo"></div>
+      <div id="modal-campos"></div>
+      <div class="aviso" id="modal-aviso"></div>
+      <div class="modal-botones">
+        <button type="button" id="modal-btn-cancelar" style="background:#fff;color:var(--petroleo);border:1px solid #d8dede;border-radius:8px;font-weight:bold;padding:12px;cursor:pointer">Cancelar</button>
+        <button type="button" class="guardar" id="modal-btn-guardar">Guardar corrección</button>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
