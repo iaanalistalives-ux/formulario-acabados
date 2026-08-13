@@ -366,7 +366,7 @@
     </div>
     <div class="campo" style="max-width:110px">
       <label for="semana">Semana N°</label>
-      <input type="number" id="semana" min="1" max="53" placeholder="Ej: 27">
+      <input type="number" id="semana" readonly style="background:#eef2f1;cursor:not-allowed;color:var(--petroleo);font-weight:bold">
     </div>
     <div class="campo">
       <label for="area">Área</label>
@@ -578,7 +578,7 @@
   </section>
 
   <div class="lista-hoy">
-    <h3>Agregado en esta sesión (<span id="contador-hoy">0</span>)</h3>
+    <h3><span id="titulo-lista-hoy">Agregado en esta sesión</span> (<span id="contador-hoy">0</span>)</h3>
     <div id="lista-items"></div>
   </div>
 
@@ -621,12 +621,10 @@
         modulosPorArea = data.modulos || {};
         stdTabla = data.std || [];
         poblarClientesRechazo();
-        if (data.semana && !$('semana').value) {
-          $('semana').value = data.semana;
-          $('legend-semana').textContent = `Semana actual en el Sheet: ${data.semana}. Cámbiala aquí solo si empieza una semana nueva.`;
-        }
         fechaInicioSemana = data.fechaInicio || '';
         semanaReferencia = data.semana || null;
+        actualizarSemanaPorFecha(); // 13-ago-2026: la semana ya no se escribe a mano, se calcula sola desde la fecha
+        $('legend-semana').textContent = data.semana ? `Semana actual en el Sheet: ${data.semana}. Se calcula sola según la fecha — no se edita a mano.` : '';
         poblarModulos();
         claveProrrateoActual = claveAreaModulo($('area').value, $('modulo').value); // punto de partida para la persistencia del prorrateo
         console.log('Catálogo cargado OK:', Object.keys(trabajadores).length, 'trabajadores,', stdTabla.length, 'filas STD');
@@ -1013,6 +1011,18 @@
           $('fila-objetivo').textContent = res.esArchivo ? 'No aplica: esta es una semana archivada.' : 'No aplica: esa fecha aún no llega.';
           $('fila-incentivo-objetivo').textContent = '';
           objetivoModuloActual = null;
+          // 13-ago-2026: bug real encontrado -- antes, al viajar a una fecha
+          // fuera de la semana activa, la tabla de prorrateo se quedaba
+          // "congelada" mostrando lo que hubiera antes (de otra semana), en
+          // vez de avisar que no aplica aquí. Se limpia la tabla -- pero
+          // ANTES de limpiarla, si Lady tenía algo sin guardar ahí, se
+          // guarda primero en la memoria de la sesión (no en el Sheet),
+          // para que al volver a la semana activa se lo encuentre igual.
+          if (area === 'DOBLADO') {
+            const sinGuardar = capturarProrrateoActual();
+            if (hayContenidoProrrateo(sinGuardar)) prorrateoGuardadoPorModulo[claveProrrateoActual] = sinGuardar;
+            restaurarOReiniciarProrrateo(null);
+          }
           return;
         }
 
@@ -1022,7 +1032,28 @@
           `<span class="dia-obj">${d}: ${(res.dias[i].efic * 100).toFixed(0)}%</span>`).join('');
         $('fila-incentivo-objetivo').innerHTML = DIAS_PRORRATEO.map((d, i) =>
           `<span class="dia-obj">${d}: S/ ${res.dias[i].incentivo.toFixed(2)}</span>`).join('');
-        if (area === 'DOBLADO') recalcularProrrateo();
+        if (area === 'DOBLADO') {
+          // 13-ago-2026: de vuelta en la semana activa (por ejemplo, después
+          // de haber estado viendo una fecha archivada), la tabla se
+          // resincroniza en orden de prioridad: 1) si Lady ya está
+          // escribiendo algo AHORA MISMO, no se le pisa nada; 2) si no, se
+          // restaura lo que tenía a medio llenar en esta sesión (memoria del
+          // navegador); 3) si tampoco hay nada ahí, se trae lo que ya esté
+          // guardado de verdad en SISTEMA DOB, para nunca dejarla en blanco
+          // si sí hay algo real guardado esta semana.
+          if (hayContenidoProrrateo(capturarProrrateoActual())) {
+            recalcularProrrateo();
+          } else if (prorrateoGuardadoPorModulo[claveProrrateoActual] && hayContenidoProrrateo(prorrateoGuardadoPorModulo[claveProrrateoActual])) {
+            restaurarOReiniciarProrrateo(prorrateoGuardadoPorModulo[claveProrrateoActual]);
+          } else if (res.prorrateoGuardado && res.prorrateoGuardado.length) {
+            restaurarOReiniciarProrrateo(res.prorrateoGuardado.map(function (p) {
+              return { estilo: p.estilo, std: buscarPorEstiloColC(p.estilo) ?? buscarClienteDob(p.estilo) ?? '', cantidades: p.cantidades };
+            }));
+            prorrateoGuardadoPorModulo[claveProrrateoActual] = capturarProrrateoActual();
+          } else {
+            recalcularProrrateo();
+          }
+        }
         llenarTablaSistemaPlancha(res.dias); // todas las áreas, DOBLADO incluido
       })
       .catch(() => {
@@ -1602,6 +1633,7 @@
     const fecha = $('fecha').value;
     const area = $('area').value;
     const modulo = $('modulo').value;
+    $('titulo-lista-hoy').textContent = 'Agregado en esta sesión';
     const todos = leerStorageHoy();
     const locales = todos.filter(it => {
       const p = it.payload || {};
@@ -1720,27 +1752,96 @@
     $('semana').value = Number(semanaReferencia) + diffSemanas;
   }
 
+  // 13-ago-2026: "Buscar" ya no se limita al módulo seleccionado -- trae
+  // TODO lo registrado esa fecha, en TODAS las áreas y módulos, agrupado
+  // para que sea fácil de leer. Cada fila conserva su propia área/módulo,
+  // así que "Corregir" sigue funcionando igual (el modal ya no depende de
+  // qué esté seleccionado arriba).
+  function buscarTodoElDia() {
+    const fecha = $('fecha').value;
+    if (!fecha) return;
+    $('titulo-lista-hoy').textContent = 'Todo lo registrado el ' + fecha.split('-').reverse().join('/');
+    fetch(URL_APPS_SCRIPT + '?accion=registrosDelDiaTodasAreas&fecha=' + encodeURIComponent(fecha))
+      .then(r => r.json())
+      .then(res => {
+        if ($('fecha').value !== fecha) return; // la fecha cambió mientras esperábamos
+        if (!res.ok) { renderizarItems([]); return; }
+        // 13-ago-2026: si la fecha cae en una semana YA ARCHIVADA, no hay
+        // filas crudas que corregir (se limpiaron al cerrar) -- se muestra
+        // en su lugar el resultado real de esa semana (eficiencia e
+        // incentivo por persona), de solo lectura.
+        if (res.esArchivo) {
+          $('titulo-lista-hoy').textContent = 'Semana archivada — resultado del ' + fecha.split('-').reverse().join('/');
+          renderizarResumenArchivado(res.personas || []);
+          return;
+        }
+        const semana = $('semana').value;
+        const items = [];
+        (res.produccionModulo || []).forEach(f => {
+          const payload = { tipo: 'produccionModulo', fecha, area: f.area, modulo: f.modulo, semana, clave: f.clave, subcategoria: f.subcategoria || '', cant: f.cant, stdManual: f.stdManual || '', improd: f.improd || '', apoyo: f.apoyo || '' };
+          const etiqueta = `[${f.area}] Módulo ${f.modulo} · ${f.cant} pdas · estilo ${f.clave}`;
+          items.push({ tipo: 'produccionModulo', etiqueta, hoja: 'PRODUCCION MODULO', fila: f.fila, payload });
+        });
+        (res.sistemaDob || []).forEach(f => {
+          const payload = { tipo: 'sistema', fecha, area: 'DOBLADO', modulo: f.modulo, semana, estilo: f.estilo, cant: f.cant };
+          items.push({ tipo: 'sistema', etiqueta: `[DOBLADO] ${f.modulo} · ${f.estilo} · ${f.cant} pdas (sistema)`, hoja: 'SISTEMA DOB', fila: f.fila, payload });
+        });
+        (res.auditoriaDob || []).forEach(f => {
+          const payload = { tipo: 'rechazo', fecha, area: 'DOBLADO', modulo: f.modulo, semana, cliente: f.cliente, cant: f.cant, improd: f.improd || '', apoyo: f.apoyo || '' };
+          items.push({ tipo: 'rechazo', etiqueta: `[DOBLADO] ${f.modulo} · ${f.cliente} · ${f.cant} rechazadas`, hoja: 'AUDITORIA DOB', fila: f.fila, payload });
+        });
+        items.sort((a, b) => (a.payload.area + a.payload.modulo).localeCompare(b.payload.area + b.payload.modulo, 'es', { numeric: true }));
+        renderizarItems(items);
+      })
+      .catch(() => {});
+  }
+
+  // Fila de solo lectura para una semana archivada -- sin Corregir ni
+  // Eliminar (esas filas crudas ya no existen), solo el resultado final.
+  function renderizarResumenArchivado(personas) {
+    $('lista-items').innerHTML = '';
+    entradasGuardadas = {};
+    contador = personas.length;
+    $('contador-hoy').textContent = contador;
+    if (personas.length === 0) {
+      $('lista-items').innerHTML = '<div class="item-hoy" style="border-left-color:var(--gris)"><span class="texto-item">Nadie registrado ese día (esa semana archivada).</span></div>';
+      return;
+    }
+    personas.forEach(p => {
+      const div = document.createElement('div');
+      div.className = 'item-hoy';
+      div.style.borderLeftColor = 'var(--aviso)';
+      div.innerHTML = `<span class="texto-item">[${p.area}] ${p.modulo} · ${p.nombre} · ${(p.efic * 100).toFixed(0)}% efic · S/ ${p.incentivo.toFixed(2)}<span class="tipo"> · archivado (solo lectura)</span></span>`;
+      $('lista-items').appendChild(div);
+    });
+  }
+
   // 13-ago-2026: botón "Buscar" explícito -- antes todo dependía de que
   // cambiar un campo disparara el refresco solo; ahora Lady tiene un botón
-  // claro que trae lo registrado en esa fecha/área/módulo, con una
-  // confirmación visible de que sí se actualizó (antes no había ninguna
-  // señal de que la búsqueda hubiera funcionado).
+  // claro que trae todo lo registrado esa fecha (todas las áreas y
+  // módulos), con una confirmación visible de que sí se actualizó (antes
+  // no había ninguna señal de que la búsqueda hubiera funcionado).
   function buscarYActualizar() {
     const btn = $('btn-buscar');
     btn.disabled = true;
     btn.textContent = 'Buscando...';
     $('legend-buscar').textContent = '';
+    actualizarSemanaPorFecha(); // por si acaso, asegura que la semana esté al día antes de buscar
     mostrarIntegrantesAutomaticos();
     cargarObjetivoModulo();
-    renderizarLista();
+    buscarTodoElDia();
     setTimeout(() => {
       btn.disabled = false;
       btn.textContent = '🔍 Buscar';
-      $('legend-buscar').textContent = '✓ Actualizado con lo registrado en esa fecha/área/módulo.';
-      setTimeout(() => { $('legend-buscar').textContent = ''; }, 4000);
+      $('legend-buscar').textContent = '✓ Actualizado con todo lo registrado esa fecha, todas las áreas y módulos.';
+      setTimeout(() => { $('legend-buscar').textContent = ''; }, 5000);
     }, 500);
   }
 
+  // 13-ago-2026: 'input' se dispara con cada tecla/selección (más rápido que
+  // 'change', que en algunos navegadores solo llega al perder el foco) --
+  // así la semana se actualiza al toque, sin depender de hacer clic afuera.
+  $('fecha').addEventListener('input', actualizarSemanaPorFecha);
   $('fecha').addEventListener('change', () => {
     actualizarSemanaPorFecha();
     renderizarLista();
