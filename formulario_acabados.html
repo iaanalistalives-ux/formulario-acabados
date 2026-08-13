@@ -381,8 +381,13 @@
       <label for="modulo">Módulo</label>
       <select id="modulo"><option value="">Cargando...</option></select>
     </div>
+    <div class="campo" style="max-width:130px">
+      <label>&nbsp;</label>
+      <button type="button" id="btn-buscar" style="background:var(--esmeralda);color:#fff;border:none;border-radius:6px;padding:9px 14px;font-size:14px;font-weight:bold;cursor:pointer;white-space:nowrap;width:100%">🔍 Buscar</button>
+    </div>
   </div>
   <div class="legend-semana" id="legend-semana"></div>
+  <div class="legend-semana" id="legend-buscar" style="color:var(--esmeralda);font-weight:bold;min-height:16px"></div>
 
   <div class="integrantes-box visible" id="integrantes-box">
     <div class="label">Integrantes de este módulo <button type="button" id="btn-editar-integrantes" class="link-editar">✎ Cambiar integrantes</button></div>
@@ -593,6 +598,7 @@
   let modulosPorArea = {};  // { PLANCHA: [{modulo:'PL-1', integrantes:[...]}], ... }
   let stdTabla = [];
   let fechaInicioSemana = ''; // lunes de la semana activa, yyyy-MM-dd
+  let semanaReferencia = null; // número de esa semana activa, para calcular a qué semana pertenece cualquier otra fecha
   let objetivoModuloActual = null; // {dias:[{minAsist,efic}x7]} del módulo seleccionado
   // 27-jul-2026: el prorrateo ya no se borra al cambiar de módulo/área. Se
   // guarda en memoria (dura mientras la página siga abierta, no sobrevive un
@@ -620,6 +626,7 @@
           $('legend-semana').textContent = `Semana actual en el Sheet: ${data.semana}. Cámbiala aquí solo si empieza una semana nueva.`;
         }
         fechaInicioSemana = data.fechaInicio || '';
+        semanaReferencia = data.semana || null;
         poblarModulos();
         claveProrrateoActual = claveAreaModulo($('area').value, $('modulo').value); // punto de partida para la persistencia del prorrateo
         console.log('Catálogo cargado OK:', Object.keys(trabajadores).length, 'trabajadores,', stdTabla.length, 'filas STD');
@@ -1692,13 +1699,57 @@
   activarSumadorRapido('r-cant');
   activarSumadorRapido('s-cant');
 
+  // 13-ago-2026: si Lady cambia la fecha, la "Semana N°" se ajusta sola a la
+  // semana que le corresponde a esa fecha -- para que nunca se guarde algo
+  // bajo el número de semana equivocado (ese número se escribe en
+  // PARAMETROS!C5 cada vez que se guarda algo, así que un desfase ahí sí
+  // importa). Se calcula contando de 7 en 7 días desde el lunes de la
+  // semana activa conocida (fechaInicioSemana/semanaReferencia), sin
+  // necesidad de preguntarle nada al servidor.
+  function actualizarSemanaPorFecha() {
+    const fechaVal = $('fecha').value;
+    if (!fechaVal || !fechaInicioSemana || !semanaReferencia) return;
+    const fecha = new Date(fechaVal + 'T00:00:00');
+    const refLunes = new Date(fechaInicioSemana + 'T00:00:00');
+    const diaSemana = fecha.getDay(); // 0=domingo,1=lunes,...,6=sábado
+    const offsetALunes = diaSemana === 0 ? 6 : diaSemana - 1;
+    const lunesDeFecha = new Date(fecha);
+    lunesDeFecha.setDate(lunesDeFecha.getDate() - offsetALunes);
+    const diffDias = Math.round((lunesDeFecha - refLunes) / 86400000);
+    const diffSemanas = Math.round(diffDias / 7);
+    $('semana').value = Number(semanaReferencia) + diffSemanas;
+  }
+
+  // 13-ago-2026: botón "Buscar" explícito -- antes todo dependía de que
+  // cambiar un campo disparara el refresco solo; ahora Lady tiene un botón
+  // claro que trae lo registrado en esa fecha/área/módulo, con una
+  // confirmación visible de que sí se actualizó (antes no había ninguna
+  // señal de que la búsqueda hubiera funcionado).
+  function buscarYActualizar() {
+    const btn = $('btn-buscar');
+    btn.disabled = true;
+    btn.textContent = 'Buscando...';
+    $('legend-buscar').textContent = '';
+    mostrarIntegrantesAutomaticos();
+    cargarObjetivoModulo();
+    renderizarLista();
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = '🔍 Buscar';
+      $('legend-buscar').textContent = '✓ Actualizado con lo registrado en esa fecha/área/módulo.';
+      setTimeout(() => { $('legend-buscar').textContent = ''; }, 4000);
+    }, 500);
+  }
+
   $('fecha').addEventListener('change', () => {
+    actualizarSemanaPorFecha();
     renderizarLista();
     mostrarIntegrantesAutomaticos();
     cargarObjetivoModulo(); // 12-ago-2026: Sistema ya siempre está visible, se refresca solo
   });
   $('area').addEventListener('change', renderizarLista);
   $('modulo').addEventListener('change', renderizarLista);
+  $('btn-buscar').addEventListener('click', buscarYActualizar);
   renderizarLista();
 </script>
 
