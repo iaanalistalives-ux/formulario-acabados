@@ -704,9 +704,11 @@ function renderBotonesRanking() {
     btn.addEventListener('click', () => mostrarRankingArea(btn.dataset.area));
   });
   $('btnToggleGraficoEff').addEventListener('click', mostrarGraficoEff);
-  // si ya había algo elegido (por ejemplo, después de Actualizar), lo vuelve a mostrar con los datos frescos
+  // si ya había algo elegido (por ejemplo, después de Actualizar), lo vuelve a mostrar con los datos frescos;
+  // si es la primera vez, arranca mostrando la primera área (PLANCHA) en vez de dejar la caja vacía.
   if (window._vistaEfiArea === 'grafico') mostrarGraficoEff();
   else if (window._areaRankingActiva && areasConDatos.includes(window._areaRankingActiva)) mostrarRankingArea(window._areaRankingActiva);
+  else if (areasConDatos.length) mostrarRankingArea(areasConDatos[0]);
 }
 
 // 13-ago-2026: "ranking" y "gráfico" ahora comparten UNA sola caja de altura
