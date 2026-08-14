@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LIVES — Dashboard Acabados</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root{
     --petroleo:#0E3B36; --petroleo-d:#092824; --esmeralda:#10B981; --alerta:#DC2626;
@@ -62,6 +63,7 @@
   <select id="selSemana" style="padding:8px 10px;border-radius:6px;border:none;font-size:13px;font-weight:bold;color:#0E3B36;max-width:220px">
     <option value="actual">📡 Semana actual (en vivo)</option>
   </select>
+  <button class="refresh" id="btnMensual" style="background:#5B7C78">📅 Mensual/Anual</button>
   <button class="refresh" id="btnCerrarSemana" style="background:#DC2626">🔒 Cerrar semana</button>
   <button class="refresh" id="btnRefresh">↻ Actualizar</button>
 </div>
@@ -93,14 +95,40 @@
 
     <div class="panel">
       <h3>Detalle por trabajador <button class="refresh" id="btnExportar" style="float:right;background:var(--monetario);font-size:12px;padding:6px 12px">📥 Exportar vista a Excel</button></h3>
-      <div class="tabs" id="tabs"></div>
-      <div class="scroll">
-        <table id="tbl"><thead></thead><tbody></tbody></table>
+
+      <div class="tabs" id="tabsFormato" style="margin-bottom:10px">
+        <div class="tab on" data-f="normal">📋 Detalle normal</div>
+        <div class="tab" data-f="excel">📊 Vista Excel</div>
+        <div class="tab" data-f="reporte">📄 Reporte</div>
       </div>
-      <div class="legend">La celda de eficiencia se pinta verde ≥85%, ámbar 70–84%, rosa &lt;70%. El incentivo diario ya considera la curva y el básico de cada trabajador. La columna % Rechazo Audit. solo aplica a DOBLADO (viene de AUDITORIA DOB). Desde que la digitación pasó a ser por módulo (no por persona), las columnas de % Efic diario y Prendas de esta tabla pueden salir en 0 para trabajadores de módulos con 2+ integrantes — el incentivo en soles sigue siendo exacto. Para ver la producción real por pareja/módulo, usa la pestaña <b>POR MÓDULO</b>. El <b>% Efic Sem</b> del módulo usa el mismo criterio que la vista individual (promedio de las eficiencias diarias, ya topadas), por eso una pareja de dos operarias al 77% da 77% y no un número inflado. La columna <b>Prendas total</b> suma producidas + rechazadas (las rechazadas solo existen en DOBLADO, vienen de AUDITORIA DOB).</div>
-      <div class="legend" id="legend-exportar" style="margin-top:4px">"Exportar vista a Excel" descarga TODAS/PLANCHA/VAPOR/DOBLADO/ENCAJADO según la pestaña que tengas abierta arriba (no exporta la vista "POR MÓDULO", esa se ve solo en pantalla por ahora). El Excel trae 2 pestañas: <b>RESUMEN</b> (los números finales) y <b>REGISTROS</b> (lo que se digitó esa semana, ordenado y legible) — sirve de respaldo antes de limpiar datos del Sheet.</div>
+
+      <div id="vistaNormal">
+        <div class="tabs" id="tabs"></div>
+        <div class="scroll">
+          <table id="tbl"><thead></thead><tbody></tbody></table>
+        </div>
+        <div class="legend">La celda de eficiencia se pinta verde ≥85%, ámbar 70–84%, rosa &lt;70%. El incentivo diario ya considera la curva y el básico de cada trabajador. La columna % Rechazo Audit. solo aplica a DOBLADO (viene de AUDITORIA DOB). Desde que la digitación pasó a ser por módulo (no por persona), las columnas de % Efic diario y Prendas de esta tabla pueden salir en 0 para trabajadores de módulos con 2+ integrantes — el incentivo en soles sigue siendo exacto. Para ver la producción real por pareja/módulo, usa la pestaña <b>POR MÓDULO</b>. El <b>% Efic Sem</b> del módulo usa el mismo criterio que la vista individual (promedio de las eficiencias diarias, ya topadas), por eso una pareja de dos operarias al 77% da 77% y no un número inflado. La columna <b>Prendas total</b> suma producidas + rechazadas (las rechazadas solo existen en DOBLADO, vienen de AUDITORIA DOB).</div>
+        <div class="legend" id="legend-exportar" style="margin-top:4px">"Exportar vista a Excel" descarga TODAS/PLANCHA/VAPOR/DOBLADO/ENCAJADO según la pestaña que tengas abierta arriba (no exporta la vista "POR MÓDULO", esa se ve solo en pantalla por ahora). El Excel trae 2 pestañas: <b>RESUMEN</b> (los números finales) y <b>REGISTROS</b> (lo que se digitó esa semana, ordenado y legible) — sirve de respaldo antes de limpiar datos del Sheet.</div>
+      </div>
+
+      <div id="vistaExcelDash" class="hidden">
+        <div id="excelContenido" style="overflow-x:auto"></div>
+        <div class="legend" style="margin-top:8px">Misma estructura del archivo que se descarga: bloques por área, módulos agrupados y ordenados. El detalle día por día completo (LUN a DOM) va en el Excel descargado — aquí es el resumen semanal para revisar rápido en pantalla.</div>
+      </div>
+
+      <div id="vistaReporteDash" class="hidden">
+        <div id="reporteContenido"></div>
+      </div>
     </div>
 
+    <div class="footer">Confidencial — Uso Interno · LIVES · Datos en vivo desde Google Sheets</div>
+  </div>
+
+  <div id="vistaMensual" class="hidden">
+    <div class="panel">
+      <h3>Eficiencia mensual / anual <span>promedio ponderado real (Σ Min Prod / Σ Min Asist), desde HISTORIAL — solo semanas ya archivadas</span></h3>
+      <div id="mensualContenido" style="overflow-x:auto">Cargando...</div>
+    </div>
     <div class="footer">Confidencial — Uso Interno · LIVES · Datos en vivo desde Google Sheets</div>
   </div>
 </div>
@@ -124,6 +152,61 @@ function err(msg){$('errbox').innerHTML='<div class="err">'+msg+'</div>';}
 function clearErr(){$('errbox').innerHTML='';}
 
 $('btnRefresh').addEventListener('click', cargar);
+
+// 13-ago-2026: vista Mensual/Anual -- pantalla aparte (oculta KPIs/gráficos/
+// tabla de la semana), con el mismo formato que ya maneja Christian en su
+// hoja de seguimiento: años lado a lado, meses como filas, área como
+// columnas, promedio anual abajo. Toda la eficiencia es promedio PONDERADO
+// real (Σ Min Prod / Σ Min Asist de HISTORIAL), nunca promedio de
+// porcentajes ya calculados.
+let enVistaMensual = false;
+function toggleVistaMensual() {
+  enVistaMensual = !enVistaMensual;
+  const btn = $('btnMensual');
+  if (enVistaMensual) {
+    $('content').classList.add('hidden');
+    $('vistaMensual').classList.remove('hidden');
+    btn.textContent = '📊 Volver a semana';
+    cargarMensualAnual();
+  } else {
+    $('vistaMensual').classList.add('hidden');
+    $('content').classList.remove('hidden');
+    btn.textContent = '📅 Mensual/Anual';
+  }
+}
+$('btnMensual').addEventListener('click', toggleVistaMensual);
+
+function cargarMensualAnual() {
+  $('mensualContenido').textContent = 'Cargando...';
+  fetch(URL_APPS_SCRIPT + '?accion=resumenMensualAnual')
+    .then(r => r.json())
+    .then(res => {
+      if (!res.ok || !res.anios || !res.anios.length) {
+        $('mensualContenido').innerHTML = '<p style="color:' + STONE + '">Todavía no hay semanas archivadas suficientes para armar esta vista — aparece sola a medida que se van cerrando semanas.</p>';
+        return;
+      }
+      const AREAS_COL = [['DOBLADO','DOB'],['PLANCHA','PL'],['VAPOR','VAP'],['ENCAJADO','ENC']];
+      const fmtPct = v => v === null ? '—' : (v * 100).toFixed(0) + '%';
+      const html = res.anios.map(anio => {
+        const filas = res.meses.map(mes => {
+          const d = res.datos[anio][mes];
+          return `<tr><td style="text-align:left;color:${STONE}">${mes}</td>` +
+            AREAS_COL.map(([full]) => `<td class="num">${fmtPct(d[full])}</td>`).join('') + '</tr>';
+        }).join('');
+        const prom = res.datos[anio].PROMEDIO;
+        const filaProm = `<tr style="border-top:2px solid ${PETROLEO};font-weight:bold;background:#E3F2EE"><td style="text-align:left">PROMEDIO</td>` +
+          AREAS_COL.map(([full]) => `<td class="num">${fmtPct(prom[full])}</td>`).join('') + '</tr>';
+        return `<div style="display:inline-block;vertical-align:top;margin:0 20px 16px 0">
+          <table style="width:auto">
+            <thead><tr><th style="background:${SLATE}">${anio}</th>${AREAS_COL.map(([,short])=>`<th>${short}</th>`).join('')}</tr></thead>
+            <tbody>${filas}${filaProm}</tbody>
+          </table>
+        </div>`;
+      }).join('');
+      $('mensualContenido').innerHTML = html;
+    })
+    .catch(() => { $('mensualContenido').innerHTML = '<p style="color:' + ALERTA + '">No se pudo cargar la vista mensual/anual. Intenta de nuevo.</p>'; });
+}
 
 // 17-jul-2026: selector de semana -- llena el desplegable con las semanas
 // que ya tienen detalle diario archivado (agrupadas visualmente por
@@ -350,6 +433,7 @@ function renderHistorico(data) {
   }));
   window._tabActiva = 'TODAS';
   fillTable('TODAS');
+  refrescarVistaFormatoActual();
 
   $('content').classList.remove('hidden');
 }
@@ -508,6 +592,7 @@ function render(data){
   }));
   window._tabActiva='TODAS';
   fillTable('TODAS');
+  refrescarVistaFormatoActual();
 
   $('content').classList.remove('hidden');
 }
@@ -519,7 +604,7 @@ function fillTable(area){
     .sort((a,b)=> a.area.localeCompare(b.area)
       || String(a.grupo).localeCompare(String(b.grupo),'es',{numeric:true})
       || b.efsem-a.efsem);
-  const head=['Trabajador','Área','Grupo',...DAYS,'% Efic Sem','Prendas total','Incent. S/','% Rechazo Audit.'];
+  const head=['Trabajador','Área','Grupo',...DAYS,'% Efic Sem','Prendas total','% Rechazo Audit.','Incent. S/'];
   $('tbl').querySelector('thead').innerHTML='<tr>'+head.map((h,i)=>
     `<th class="${i>=3?'num':''}">${h}</th>`).join('')+'</tr>';
   $('tbl').querySelector('tbody').innerHTML=rows.map(r=>{
@@ -539,8 +624,8 @@ function fillTable(area){
       ${days}
       <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(r.efsem*100).toFixed(0)}%</td>
       <td class="num">${(r.pdas + ((window._rechPdasPorGrupo&&window._rechPdasPorGrupo[r.grupo])||0)).toLocaleString('es-PE')}</td>
-      <td class="num" style="font-weight:bold;color:${PETROLEO}">${r.inc.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       ${rechazoCell}
+      <td class="num" style="font-weight:bold;color:${PETROLEO}">${r.inc.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
     </tr>`;
   }).join('');
 }
@@ -563,7 +648,7 @@ function fillTablaPorModulo(){
   });
   const lista=Object.values(grupos).sort((a,b)=>a.area.localeCompare(b.area)||a.grupo.localeCompare(b.grupo));
 
-  const head=['Módulo/Pareja','Área','Integrantes','% Efic Sem','Prendas total','Incent. S/ (total grupo)','% Rechazo Audit.'];
+  const head=['Módulo/Pareja','Área','Integrantes','% Efic Sem','Prendas total','% Rechazo Audit.','Incent. S/ (total grupo)'];
   $('tbl').querySelector('thead').innerHTML='<tr>'+head.map((h,i)=>`<th class="${i>=3?'num':''}">${h}</th>`).join('')+'</tr>';
   $('tbl').querySelector('tbody').innerHTML=lista.map(g=>{
     const efMod = g.efCntSem>0 ? g.efSumSem/g.efCntSem : 0; // mismo criterio que la vista individual
@@ -577,11 +662,172 @@ function fillTablaPorModulo(){
       <td>${g.integrantes.join(' · ')}</td>
       <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(efMod*100).toFixed(0)}%</td>
       <td class="num">${(g.pdas + g.rechPdas).toLocaleString('es-PE')}</td>
-      <td class="num" style="font-weight:bold;color:${PETROLEO}">${g.inc.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
       ${rechazoCell}
+      <td class="num" style="font-weight:bold;color:${PETROLEO}">${g.inc.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
     </tr>`;
   }).join('');
 }
+
+// 13-ago-2026: helper compartido por "Vista Excel" y "Reporte" -- misma
+// agrupación por módulo que ya usa POR MÓDULO, para que los 3 lugares
+// muestren siempre el mismo número, nunca versiones distintas.
+function agruparPorModuloParaVistas() {
+  const rows = window._rows || [];
+  const grupos = {};
+  rows.forEach(r => {
+    if (!r.grupo) return;
+    if (!grupos[r.grupo]) grupos[r.grupo] = {
+      grupo: r.grupo, area: r.area, integrantes: [], inc: 0,
+      pdas: (window._pdasPorGrupo && window._pdasPorGrupo[r.grupo]) || 0,
+      rechPdas: (window._rechPdasPorGrupo && window._rechPdasPorGrupo[r.grupo]) || 0,
+      efSumSem: 0, efCntSem: 0, rechazo: r.rechazo
+    };
+    const g = grupos[r.grupo];
+    g.integrantes.push(r.oper || r.cod);
+    g.inc += r.inc;
+    if (r.efsem > 0) { g.efSumSem += r.efsem; g.efCntSem++; }
+  });
+  return Object.values(grupos).map(g => {
+    g.efMod = g.efCntSem > 0 ? g.efSumSem / g.efCntSem : 0;
+    return g;
+  }).sort((a, b) => a.area.localeCompare(b.area) || a.grupo.localeCompare(b.grupo, 'es', { numeric: true }));
+}
+
+// "Vista Excel" -- misma estructura del archivo descargado (bloques por
+// área, módulos agrupados y ordenados), pero solo el resumen semanal en
+// pantalla; el detalle día por día completo va en el Excel real.
+function renderVistaExcel() {
+  if (!window._rows) return;
+  const lista = agruparPorModuloParaVistas();
+  const ORDEN_EXCEL = ['DOBLADO', 'PLANCHA', 'VAPOR', 'ENCAJADO']; // mismo orden que el Excel real (BLOQUES_EXPORT)
+  const html = ORDEN_EXCEL.map(area => {
+    const grupos = lista.filter(g => g.area === area);
+    if (!grupos.length) return '';
+    const conRechazo = area === 'DOBLADO';
+    const headCols = ['MÓDULO', 'OPERARIO', '% EFI SEM', 'Pdas Prod', 'INCENT. S/'].concat(conRechazo ? ['% RECHAZO'] : []);
+    const filas = grupos.map(g => {
+      const cs = effColor(g.efMod);
+      const rechazoCell = conRechazo
+        ? (g.rechazo != null ? `<td class="num">${(g.rechazo * 100).toFixed(0)}%</td>` : '<td class="num" style="color:#bbb">—</td>')
+        : '';
+      return `<tr>
+        <td style="font-weight:bold;background:#F6F9F8">${g.grupo}</td>
+        <td>${g.integrantes.join(' · ')}</td>
+        <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(g.efMod * 100).toFixed(0)}%</td>
+        <td class="num">${(g.pdas + g.rechPdas).toLocaleString('es-PE')}</td>
+        <td class="num" style="font-weight:bold;color:${PETROLEO}">${g.inc.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+        ${rechazoCell}
+      </tr>`;
+    }).join('');
+    return `<div style="margin-bottom:18px">
+      <div style="background:${PETROLEO};color:#fff;text-align:center;font-weight:bold;padding:6px;border-radius:6px 6px 0 0;font-size:13px">${area}</div>
+      <table style="min-width:520px"><tr>${headCols.map(h => `<th>${h}</th>`).join('')}</tr>${filas}</table>
+    </div>`;
+  }).join('');
+  $('excelContenido').innerHTML = html || '<p style="color:' + STONE + '">No hay datos para mostrar.</p>';
+}
+
+// "Reporte" -- mismo formato del PDF que Lady arma a mano cada semana, pero
+// siempre actualizado (nunca hay que copiarlo). Cada sección tiene su
+// propio botón para descargarla como imagen (PNG), lista para el correo.
+function renderVistaReporte() {
+  if (!window._rows) return;
+  const lista = agruparPorModuloParaVistas();
+  const areasActivas = AREAS.filter(a => lista.some(g => g.area === a));
+  const effs = areasActivas.map(a => {
+    const gs = lista.filter(g => g.area === a && g.efMod > 0);
+    return gs.length ? gs.reduce((s, g) => s + g.efMod, 0) / gs.length : 0;
+  }).filter(v => v > 0);
+  const effGeneral = effs.length ? effs.reduce((a, b) => a + b, 0) / effs.length : 0;
+
+  const SECCIONES = [
+    { area: 'DOBLADO', titulo: '1. Doblado', individual: false },
+    { area: 'PLANCHA', titulo: '2. Plancha Manual', individual: false },
+    { area: 'VAPOR', titulo: '3. Vapor', individual: true },
+    { area: 'ENCAJADO', titulo: '4. Encajado', individual: true }
+  ];
+
+  let html = `<div style="background:#fff;border:1px solid ${STONE}22;border-radius:10px;padding:18px;display:inline-block;margin-bottom:20px">
+    <div style="font-size:32px;font-weight:bold;color:${PETROLEO}">${(effGeneral * 100).toFixed(0)}%</div>
+    <div style="font-size:11px;color:${STONE};text-transform:uppercase">Eficiencia Acabados (prom. áreas)</div>
+  </div>`;
+
+  SECCIONES.forEach((sec, idx) => {
+    const grupos = lista.filter(g => g.area === sec.area);
+    if (!grupos.length) return;
+    const conRechazo = sec.area === 'DOBLADO';
+    const headCols = sec.individual
+      ? ['Trabajador', 'Área', '% Efic Sem', 'Prendas total']
+      : ['Módulo/Pareja', 'Área', 'Integrantes', '% Efic Sem', 'Prendas total'].concat(conRechazo ? ['% Rechazo Audit.'] : []);
+    const filas = grupos.map(g => {
+      const cs = effColor(g.efMod);
+      const rechazoCell = conRechazo
+        ? (g.rechazo != null ? `<td class="num">${(g.rechazo * 100).toFixed(0)}%</td>` : '<td class="num" style="color:#bbb">—</td>')
+        : '';
+      if (sec.individual) {
+        return `<tr>
+          <td>${g.integrantes.join(' · ')}</td>
+          <td><span class="tag" style="background:${areaColor(g.area)}">${g.area}</span></td>
+          <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(g.efMod * 100).toFixed(0)}%</td>
+          <td class="num">${(g.pdas + g.rechPdas).toLocaleString('es-PE')}</td>
+        </tr>`;
+      }
+      return `<tr>
+        <td style="font-weight:bold">${g.grupo}</td>
+        <td><span class="tag" style="background:${areaColor(g.area)}">${g.area}</span></td>
+        <td>${g.integrantes.join(' · ')}</td>
+        <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(g.efMod * 100).toFixed(0)}%</td>
+        <td class="num">${(g.pdas + g.rechPdas).toLocaleString('es-PE')}</td>
+        ${rechazoCell}
+      </tr>`;
+    }).join('');
+    html += `<div id="reporteSeccion${idx}" style="margin-bottom:22px;background:#fff;padding:4px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:15px;font-weight:bold;color:${PETROLEO}">${sec.titulo}</div>
+        <button type="button" class="refresh boton-exportar-seccion" data-id="reporteSeccion${idx}" data-area="${sec.area}" style="background:${MONETARIO};font-size:11px;padding:5px 10px">📷 Exportar como imagen</button>
+      </div>
+      <table><tr>${headCols.map(h => `<th>${h}</th>`).join('')}</tr>${filas}</table>
+    </div>`;
+  });
+
+  $('reporteContenido').innerHTML = html;
+  document.querySelectorAll('.boton-exportar-seccion').forEach(btn => {
+    btn.addEventListener('click', () => exportarSeccionComoImagen(btn.dataset.id, btn.dataset.area));
+  });
+}
+
+function exportarSeccionComoImagen(id, nombreArea) {
+  const el = document.getElementById(id);
+  const boton = el.querySelector('button');
+  if (boton) boton.style.visibility = 'hidden'; // no se ve en la captura, pero no mueve el layout
+  html2canvas(el, { backgroundColor: '#ffffff', scale: 2 }).then(canvas => {
+    if (boton) boton.style.visibility = '';
+    const link = document.createElement('a');
+    link.download = 'Reporte_' + nombreArea + '_' + new Date().toISOString().slice(0, 10) + '.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }).catch(() => { if (boton) boton.style.visibility = ''; alert('No se pudo generar la imagen. Intenta de nuevo.'); });
+}
+
+// Interruptor de formato (Detalle normal / Vista Excel / Reporte) -- vive
+// aparte de las pestañas TODAS/PLANCHA/etc., porque esas filtran datos y
+// esto cambia la PRESENTACIÓN completa, son cosas distintas.
+window._formatoActivo = 'normal';
+function refrescarVistaFormatoActual() {
+  if (window._formatoActivo === 'excel') renderVistaExcel();
+  else if (window._formatoActivo === 'reporte') renderVistaReporte();
+}
+document.querySelectorAll('#tabsFormato .tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#tabsFormato .tab').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    window._formatoActivo = btn.dataset.f;
+    $('vistaNormal').classList.toggle('hidden', btn.dataset.f !== 'normal');
+    $('vistaExcelDash').classList.toggle('hidden', btn.dataset.f !== 'excel');
+    $('vistaReporteDash').classList.toggle('hidden', btn.dataset.f !== 'reporte');
+    refrescarVistaFormatoActual();
+  });
+});
 
 function mkChart(id,type,data,opts){
   if(charts[id])charts[id].destroy();
