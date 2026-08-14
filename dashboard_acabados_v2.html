@@ -78,11 +78,14 @@
 
     <div class="grid2">
       <div class="panel">
-        <h3>Eficiencia semanal por área <span>ponderada vs promedio simple</span></h3>
-        <canvas id="chEff"></canvas>
-        <div class="legend"><b>Ponderada</b> (Σ min prod / Σ min disponibles) es la real de la línea. <b>Simple</b> es el promedio de operarias, como el reporte anterior; infla cuando hay operarios con muchas horas y poca producción.</div>
-        <div id="botonesRanking" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px"></div>
-        <div id="rankingResultado" class="hidden" style="margin-top:10px;border:1px solid #eee;border-radius:8px;max-height:320px;overflow-y:auto"></div>
+        <h3>Eficiencia semanal por área <span>ranking de operadores más eficientes</span></h3>
+        <div id="botonesRanking" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"></div>
+        <div id="rankingResultado" class="hidden" style="border:1px solid #eee;border-radius:8px;max-height:320px;overflow-y:auto"></div>
+        <button type="button" id="btnToggleGraficoEff" class="refresh" style="background:#5B7C78;font-size:12px;padding:6px 12px;margin-top:12px;width:100%">📊 Ver gráfico ponderada vs promedio simple</button>
+        <div id="graficoEffContainer" class="hidden" style="margin-top:12px">
+          <canvas id="chEff"></canvas>
+          <div class="legend"><b>Ponderada</b> (Σ min prod / Σ min disponibles) es la real de la línea. <b>Simple</b> es el promedio de operarias, como el reporte anterior; infla cuando hay operarios con muchas horas y poca producción.</div>
+        </div>
       </div>
       <div class="panel">
         <h3>Incentivo pagado por área <span>soles</span></h3>
@@ -806,8 +809,11 @@ function renderVistaExcel() {
     }).join('');
 
     return `<div style="margin-bottom:18px">
-      <div style="background:${PETROLEO};color:#fff;text-align:center;font-weight:bold;padding:6px;border-radius:6px 6px 0 0;font-size:13px">${area}</div>
-      <table style="min-width:1400px;font-size:11px"><tr>${headCols.map(h => `<th style="padding:5px 6px">${h}</th>`).join('')}</tr>${filasHtml}</table>
+      <table style="min-width:1400px;font-size:11px;border-collapse:collapse">
+        <tr><th colspan="${headCols.length}" style="background:${PETROLEO};color:#fff;text-align:center;font-weight:bold;padding:6px;font-size:13px">${area}</th></tr>
+        <tr>${headCols.map(h => `<th style="padding:5px 6px">${h}</th>`).join('')}</tr>
+        ${filasHtml}
+      </table>
     </div>`;
   }).join('');
   $('excelContenido').innerHTML = html || '<p style="color:' + STONE + '">No hay datos para mostrar.</p>';
@@ -913,6 +919,19 @@ document.querySelectorAll('#tabsFormato .tab').forEach(btn => {
     $('vistaReporteDash').classList.toggle('hidden', btn.dataset.f !== 'reporte');
     refrescarVistaFormatoActual();
   });
+});
+
+// 13-ago-2026: el gráfico ponderada-vs-simple pasó a ser una opción (botón),
+// ya no lo primero que se ve -- el ranking de operadores es ahora el
+// contenido principal de esta tarjeta. Chart.js a veces no dibuja bien si
+// el canvas estaba oculto al crearse, por eso se llama resize() justo
+// después de mostrarlo, por seguridad.
+$('btnToggleGraficoEff').addEventListener('click', () => {
+  const cont = $('graficoEffContainer');
+  const abierto = !cont.classList.contains('hidden');
+  cont.classList.toggle('hidden');
+  $('btnToggleGraficoEff').textContent = abierto ? '📊 Ver gráfico ponderada vs promedio simple' : '📊 Ocultar gráfico';
+  if (!abierto && charts['chEff']) setTimeout(() => charts['chEff'].resize(), 50);
 });
 
 function mkChart(id,type,data,opts){
