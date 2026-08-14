@@ -80,11 +80,12 @@
       <div class="panel">
         <h3>Eficiencia semanal por área <span>ranking de operadores más eficientes</span></h3>
         <div id="botonesRanking" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"></div>
-        <div id="rankingResultado" class="hidden" style="border:1px solid #eee;border-radius:8px;max-height:320px;overflow-y:auto"></div>
-        <button type="button" id="btnToggleGraficoEff" class="refresh" style="background:#5B7C78;font-size:12px;padding:6px 12px;margin-top:12px;width:100%">📊 Ver gráfico ponderada vs promedio simple</button>
-        <div id="graficoEffContainer" class="hidden" style="margin-top:12px">
-          <canvas id="chEff"></canvas>
-          <div class="legend"><b>Ponderada</b> (Σ min prod / Σ min disponibles) es la real de la línea. <b>Simple</b> es el promedio de operarias, como el reporte anterior; infla cuando hay operarios con muchas horas y poca producción.</div>
+        <div id="cajaEfiArea" style="border:1px solid #eee;border-radius:8px;height:340px;overflow-y:auto">
+          <div id="rankingResultado"></div>
+          <div id="graficoEffContainer" class="hidden" style="padding:10px">
+            <canvas id="chEff"></canvas>
+            <div class="legend"><b>Ponderada</b> (Σ min prod / Σ min disponibles) es la real de la línea. <b>Simple</b> es el promedio de operarias, como el reporte anterior; infla cuando hay operarios con muchas horas y poca producción.</div>
+          </div>
         </div>
       </div>
       <div class="panel">
@@ -694,40 +695,63 @@ function fillTablaPorModulo(){
 function renderBotonesRanking() {
   if (!window._rows) return;
   const areasConDatos = AREAS.filter(a => window._rows.some(r => r.area === a && r.efsem > 0));
-  $('botonesRanking').innerHTML = areasConDatos.map(a =>
+  const botonesArea = areasConDatos.map(a =>
     `<button type="button" class="refresh btn-ranking-area" data-area="${a}" style="background:${areaColor(a)};font-size:12px;padding:6px 12px">🏆 ${a}</button>`
   ).join('');
+  const botonGrafico = `<button type="button" id="btnToggleGraficoEff" class="refresh" style="background:${SLATE};font-size:12px;padding:6px 12px">📊 Ver gráfico</button>`;
+  $('botonesRanking').innerHTML = botonesArea + botonGrafico;
   document.querySelectorAll('.btn-ranking-area').forEach(btn => {
     btn.addEventListener('click', () => mostrarRankingArea(btn.dataset.area));
   });
-  // si ya había un área elegida (por ejemplo, después de Actualizar), la vuelve a mostrar con los datos frescos
-  if (window._areaRankingActiva && areasConDatos.includes(window._areaRankingActiva)) {
-    mostrarRankingArea(window._areaRankingActiva);
-  }
+  $('btnToggleGraficoEff').addEventListener('click', mostrarGraficoEff);
+  // si ya había algo elegido (por ejemplo, después de Actualizar), lo vuelve a mostrar con los datos frescos
+  if (window._vistaEfiArea === 'grafico') mostrarGraficoEff();
+  else if (window._areaRankingActiva && areasConDatos.includes(window._areaRankingActiva)) mostrarRankingArea(window._areaRankingActiva);
 }
 
+// 13-ago-2026: "ranking" y "gráfico" ahora comparten UNA sola caja de altura
+// fija (#cajaEfiArea) -- nunca cambia de tamaño sin importar cuántas
+// personas tenga el área elegida o si se ve el gráfico; si el contenido no
+// cabe, se ve con su propia barra de deslizamiento, como cualquier caja
+// normal con scroll.
 function mostrarRankingArea(area) {
   window._areaRankingActiva = area;
-  document.querySelectorAll('.btn-ranking-area').forEach(b => {
-    b.style.opacity = b.dataset.area === area ? '1' : '.55';
-  });
+  window._vistaEfiArea = 'ranking';
+  document.querySelectorAll('.btn-ranking-area').forEach(b => { b.style.opacity = b.dataset.area === area ? '1' : '.55'; });
+  if ($('btnToggleGraficoEff')) $('btnToggleGraficoEff').style.opacity = '.55';
+  $('graficoEffContainer').classList.add('hidden');
+  $('rankingResultado').classList.remove('hidden');
+
   const filas = (window._rows || [])
     .filter(r => r.area === area && r.efsem > 0)
     .sort((a, b) => b.efsem - a.efsem);
   const esPareja = area === 'DOBLADO' || area === 'PLANCHA';
   const filasHtml = filas.map((r, i) => {
     const cs = effColor(r.efsem);
+    const pdas = (window._pdasPorGrupo && window._pdasPorGrupo[r.grupo] || 0) + (window._rechPdasPorGrupo && window._rechPdasPorGrupo[r.grupo] || 0);
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid #eee;font-size:13px">
       <div><span style="color:${STONE};font-weight:bold;margin-right:8px;display:inline-block;width:20px">#${i + 1}</span>${r.oper || r.cod} <span style="color:${STONE};font-size:11px">· ${r.grupo}</span></div>
-      <div style="font-weight:bold;padding:2px 10px;border-radius:10px;background:${cs.bg};color:${cs.fg}">${(r.efsem * 100).toFixed(0)}%</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="color:${STONE};font-size:11px">${pdas.toLocaleString('es-PE')} pdas</span>
+        <span style="font-weight:bold;padding:2px 10px;border-radius:10px;background:${cs.bg};color:${cs.fg}">${(r.efsem * 100).toFixed(0)}%</span>
+      </div>
     </div>`;
   }).join('');
   $('rankingResultado').innerHTML = `
     <div style="padding:8px 12px;background:${PETROLEO};color:#fff;font-weight:bold;font-size:13px">Ranking de eficiencia — ${area}</div>
-    ${esPareja ? `<div style="padding:6px 12px;font-size:11px;color:${STONE};background:#FEF3DD">En ${area} se digita por módulo (pareja) — el % es del módulo completo, por eso ambas integrantes salen con el mismo número. No es un error.</div>` : ''}
+    ${esPareja ? `<div style="padding:6px 12px;font-size:11px;color:${STONE};background:#FEF3DD">En ${area} se digita por módulo (pareja) — el % y las prendas son del módulo completo, por eso ambas integrantes salen con el mismo número. No es un error.</div>` : ''}
+    <div style="padding:5px 12px;font-size:10px;color:${STONE};background:#F6F9F8">Ordenado por % de eficiencia · las prendas al lado son el volumen real producido esa semana.</div>
     ${filasHtml || `<p style="padding:12px;color:${STONE}">Sin datos esta semana.</p>`}
   `;
-  $('rankingResultado').classList.remove('hidden');
+}
+
+function mostrarGraficoEff() {
+  window._vistaEfiArea = 'grafico';
+  document.querySelectorAll('.btn-ranking-area').forEach(b => { b.style.opacity = '.55'; });
+  if ($('btnToggleGraficoEff')) $('btnToggleGraficoEff').style.opacity = '1';
+  $('rankingResultado').classList.add('hidden');
+  $('graficoEffContainer').classList.remove('hidden');
+  if (charts['chEff']) setTimeout(() => charts['chEff'].resize(), 50); // por si el canvas estaba oculto al crearse
 }
 
 function agruparPorModuloParaVistas() {
@@ -919,19 +943,6 @@ document.querySelectorAll('#tabsFormato .tab').forEach(btn => {
     $('vistaReporteDash').classList.toggle('hidden', btn.dataset.f !== 'reporte');
     refrescarVistaFormatoActual();
   });
-});
-
-// 13-ago-2026: el gráfico ponderada-vs-simple pasó a ser una opción (botón),
-// ya no lo primero que se ve -- el ranking de operadores es ahora el
-// contenido principal de esta tarjeta. Chart.js a veces no dibuja bien si
-// el canvas estaba oculto al crearse, por eso se llama resize() justo
-// después de mostrarlo, por seguridad.
-$('btnToggleGraficoEff').addEventListener('click', () => {
-  const cont = $('graficoEffContainer');
-  const abierto = !cont.classList.contains('hidden');
-  cont.classList.toggle('hidden');
-  $('btnToggleGraficoEff').textContent = abierto ? '📊 Ver gráfico ponderada vs promedio simple' : '📊 Ocultar gráfico';
-  if (!abierto && charts['chEff']) setTimeout(() => charts['chEff'].resize(), 50);
 });
 
 function mkChart(id,type,data,opts){
