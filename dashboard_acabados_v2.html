@@ -187,18 +187,22 @@ function cargarMensualAnual() {
       }
       const AREAS_COL = [['DOBLADO','DOB'],['PLANCHA','PL'],['VAPOR','VAP'],['ENCAJADO','ENC']];
       const fmtPct = v => v === null ? '—' : (v * 100).toFixed(0) + '%';
+      const cSty = 'padding:2px 9px;font-size:11px;border-bottom:1px solid #eee';
       const html = res.anios.map(anio => {
         const filas = res.meses.map(mes => {
           const d = res.datos[anio][mes];
-          return `<tr><td style="text-align:left;color:${STONE}">${mes}</td>` +
-            AREAS_COL.map(([full]) => `<td class="num">${fmtPct(d[full])}</td>`).join('') + '</tr>';
+          return `<tr><td style="text-align:left;color:${STONE};${cSty}">${mes}</td>` +
+            AREAS_COL.map(([full]) => `<td class="num" style="${cSty}">${fmtPct(d[full])}</td>`).join('') + '</tr>';
         }).join('');
         const prom = res.datos[anio].PROMEDIO;
-        const filaProm = `<tr style="border-top:2px solid ${PETROLEO};font-weight:bold;background:#E3F2EE"><td style="text-align:left">PROMEDIO</td>` +
-          AREAS_COL.map(([full]) => `<td class="num">${fmtPct(prom[full])}</td>`).join('') + '</tr>';
-        return `<div style="display:inline-block;vertical-align:top;margin:0 20px 16px 0">
-          <table style="width:auto">
-            <thead><tr><th style="background:${SLATE}">${anio}</th>${AREAS_COL.map(([,short])=>`<th>${short}</th>`).join('')}</tr></thead>
+        const filaProm = `<tr style="border-top:2px solid ${PETROLEO};font-weight:bold;background:#E3F2EE"><td style="text-align:left;${cSty}">PROMEDIO</td>` +
+          AREAS_COL.map(([full]) => `<td class="num" style="${cSty}">${fmtPct(prom[full])}</td>`).join('') + '</tr>';
+        return `<div style="display:inline-block;vertical-align:top;margin:0 16px 16px 0">
+          <table style="width:auto;border-collapse:collapse">
+            <thead><tr>
+              <th style="background:${SLATE};${cSty};color:#fff;font-weight:bold">${anio}</th>
+              ${AREAS_COL.map(([,short])=>`<th style="${cSty};background:${PETROLEO};color:#fff;font-weight:bold">${short}</th>`).join('')}
+            </tr></thead>
             <tbody>${filas}${filaProm}</tbody>
           </table>
         </div>`;
@@ -365,6 +369,7 @@ function renderHistorico(data) {
   window._rows = rows;
   window._pdasPorGrupo = {}; window._efPondPorGrupo = {}; window._rechPdasPorGrupo = {};
   (data.grupos || []).forEach(g => { window._pdasPorGrupo[g.grupo] = g.pdas; window._efPondPorGrupo[g.grupo] = g.efPond; if (g.rech != null) window._rechPdasPorGrupo[g.grupo] = g.rech; });
+  window._prendasPorModuloDia = data.prendasPorModuloDia || {};
 
   const fechaTxt = data.fechaInicio ? data.fechaInicio.split('-').reverse().join('/') : '';
   $('sub').innerHTML = `Semana ${data.semana} (${data.anio}) — archivada<br>Desde ${fechaTxt}`;
@@ -582,6 +587,7 @@ function render(data){
   window._pdasPorGrupo=pdasPorGrupo;
   window._rechPdasPorGrupo=rechPdasPorGrupo;
   window._efPondPorGrupo=efPondPorGrupo;
+  window._prendasPorModuloDia = data.prendasPorModuloDia || {};
   const tabs=['TODAS',...AREAS,'POR MÓDULO'];
   $('tabs').innerHTML=tabs.map((t,i)=>`<div class="tab ${i===0?'on':''}" data-a="${t}">${t}</div>`).join('');
   document.querySelectorAll('.tab').forEach(tb=>tb.addEventListener('click',()=>{
@@ -693,35 +699,65 @@ function agruparPorModuloParaVistas() {
   }).sort((a, b) => a.area.localeCompare(b.area) || a.grupo.localeCompare(b.grupo, 'es', { numeric: true }));
 }
 
-// "Vista Excel" -- misma estructura del archivo descargado (bloques por
-// área, módulos agrupados y ordenados), pero solo el resumen semanal en
-// pantalla; el detalle día por día completo va en el Excel real.
+// "Vista Excel" -- EXACTAMENTE la misma estructura y columnas del archivo
+// descargado: bloques por área, módulos agrupados y ordenados, con el
+// desglose completo LUN a DOM (Pdas/%Efi/Inc por día), una fila por
+// persona. 13-ago-2026: antes solo mostraba el resumen semanal -- ahora
+// muestra lo mismo que el Excel real, columna por columna.
 function renderVistaExcel() {
   if (!window._rows) return;
-  const lista = agruparPorModuloParaVistas();
+  const DIAS_EXCEL = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
   const ORDEN_EXCEL = ['DOBLADO', 'PLANCHA', 'VAPOR', 'ENCAJADO']; // mismo orden que el Excel real (BLOQUES_EXPORT)
+  const prendasDia = window._prendasPorModuloDia || {};
+
   const html = ORDEN_EXCEL.map(area => {
-    const grupos = lista.filter(g => g.area === area);
-    if (!grupos.length) return '';
+    const filasArea = window._rows.filter(r => r.area === area && r.grupo);
+    if (!filasArea.length) return '';
     const conRechazo = area === 'DOBLADO';
-    const headCols = ['MÓDULO', 'OPERARIO', '% EFI SEM', 'Pdas Prod', 'INCENT. S/'].concat(conRechazo ? ['% RECHAZO'] : []);
-    const filas = grupos.map(g => {
-      const cs = effColor(g.efMod);
-      const rechazoCell = conRechazo
-        ? (g.rechazo != null ? `<td class="num">${(g.rechazo * 100).toFixed(0)}%</td>` : '<td class="num" style="color:#bbb">—</td>')
-        : '';
-      return `<tr>
-        <td style="font-weight:bold;background:#F6F9F8">${g.grupo}</td>
-        <td>${g.integrantes.join(' · ')}</td>
-        <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(g.efMod * 100).toFixed(0)}%</td>
-        <td class="num">${(g.pdas + g.rechPdas).toLocaleString('es-PE')}</td>
-        <td class="num" style="font-weight:bold;color:${PETROLEO}">${g.inc.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-        ${rechazoCell}
-      </tr>`;
+
+    // Agrupar por módulo, en orden numérico, igual que el Excel real
+    const grupos = {};
+    const orden = [];
+    filasArea.forEach(r => {
+      if (!grupos[r.grupo]) { grupos[r.grupo] = []; orden.push(r.grupo); }
+      grupos[r.grupo].push(r);
+    });
+    orden.sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+
+    const headBase = ['MÓDULO', 'OPERARIO', '% EFI SEM', 'Pdas Prod', 'INCENT. S/'].concat(conRechazo ? ['% RECHAZO'] : []);
+    const headDias = [];
+    DIAS_EXCEL.forEach(d => headDias.push('Pdas ' + d, '% Efi ' + d, 'Inc ' + d));
+    const headCols = headBase.concat(headDias);
+
+    const filasHtml = orden.map(grupo => {
+      const personas = grupos[grupo];
+      const pdasSemana = (prendasDia[grupo] || [0,0,0,0,0,0,0]).reduce((a,b)=>a+b, 0);
+      return personas.map((r, i) => {
+        const cs = effColor(r.efsem);
+        const rechazoCell = conRechazo
+          ? (r.rechazo != null ? `<td class="num">${(r.rechazo * 100).toFixed(0)}%</td>` : '<td class="num" style="color:#bbb">—</td>')
+          : '';
+        const diasCeldas = DIAS_EXCEL.map((_, d) => {
+          const pdasDiaModulo = (prendasDia[grupo] || [0,0,0,0,0,0,0])[d];
+          const efDia = (r.daily || [])[d] || 0;
+          const incDia = (r.incDaily || [])[d] || 0;
+          return `<td class="num">${pdasDiaModulo || '—'}</td><td class="num">${efDia > 0 ? (efDia*100).toFixed(0)+'%' : '—'}</td><td class="num">${incDia > 0 ? incDia.toFixed(2) : '—'}</td>`;
+        }).join('');
+        return `<tr>
+          ${i === 0 ? `<td style="font-weight:bold;background:#F6F9F8" rowspan="${personas.length}">${grupo}</td>` : ''}
+          <td>${r.oper || r.cod}</td>
+          <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(r.efsem * 100).toFixed(0)}%</td>
+          <td class="num">${pdasSemana.toLocaleString('es-PE')}</td>
+          <td class="num" style="font-weight:bold;color:${PETROLEO}">${r.inc.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          ${rechazoCell}
+          ${diasCeldas}
+        </tr>`;
+      }).join('');
     }).join('');
+
     return `<div style="margin-bottom:18px">
       <div style="background:${PETROLEO};color:#fff;text-align:center;font-weight:bold;padding:6px;border-radius:6px 6px 0 0;font-size:13px">${area}</div>
-      <table style="min-width:520px"><tr>${headCols.map(h => `<th>${h}</th>`).join('')}</tr>${filas}</table>
+      <table style="min-width:1400px;font-size:11px"><tr>${headCols.map(h => `<th style="padding:5px 6px">${h}</th>`).join('')}</tr>${filasHtml}</table>
     </div>`;
   }).join('');
   $('excelContenido').innerHTML = html || '<p style="color:' + STONE + '">No hay datos para mostrar.</p>';
