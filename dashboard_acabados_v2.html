@@ -81,6 +81,8 @@
         <h3>Eficiencia semanal por área <span>ponderada vs promedio simple</span></h3>
         <canvas id="chEff"></canvas>
         <div class="legend"><b>Ponderada</b> (Σ min prod / Σ min disponibles) es la real de la línea. <b>Simple</b> es el promedio de operarias, como el reporte anterior; infla cuando hay operarios con muchas horas y poca producción.</div>
+        <div id="botonesRanking" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px"></div>
+        <div id="rankingResultado" class="hidden" style="margin-top:10px;border:1px solid #eee;border-radius:8px;max-height:320px;overflow-y:auto"></div>
       </div>
       <div class="panel">
         <h3>Incentivo pagado por área <span>soles</span></h3>
@@ -439,6 +441,7 @@ function renderHistorico(data) {
   window._tabActiva = 'TODAS';
   fillTable('TODAS');
   refrescarVistaFormatoActual();
+  renderBotonesRanking();
 
   $('content').classList.remove('hidden');
 }
@@ -599,6 +602,7 @@ function render(data){
   window._tabActiva='TODAS';
   fillTable('TODAS');
   refrescarVistaFormatoActual();
+  renderBotonesRanking();
 
   $('content').classList.remove('hidden');
 }
@@ -677,6 +681,52 @@ function fillTablaPorModulo(){
 // 13-ago-2026: helper compartido por "Vista Excel" y "Reporte" -- misma
 // agrupación por módulo que ya usa POR MÓDULO, para que los 3 lugares
 // muestren siempre el mismo número, nunca versiones distintas.
+// 13-ago-2026: ranking de operadores más eficientes, por área -- un botón
+// por cada área que tenga datos esta semana. Usa el mismo % Efic Sem que
+// ya se calcula en todo el sistema (nunca un número nuevo aparte). En
+// PLANCHA/DOBLADO el % es del MÓDULO (pareja), no de cada persona por
+// separado -- así funciona la digitación en esas áreas, así que ambas
+// integrantes de una pareja siempre salen empatadas con el mismo número,
+// eso es correcto, no un error.
+function renderBotonesRanking() {
+  if (!window._rows) return;
+  const areasConDatos = AREAS.filter(a => window._rows.some(r => r.area === a && r.efsem > 0));
+  $('botonesRanking').innerHTML = areasConDatos.map(a =>
+    `<button type="button" class="refresh btn-ranking-area" data-area="${a}" style="background:${areaColor(a)};font-size:12px;padding:6px 12px">🏆 ${a}</button>`
+  ).join('');
+  document.querySelectorAll('.btn-ranking-area').forEach(btn => {
+    btn.addEventListener('click', () => mostrarRankingArea(btn.dataset.area));
+  });
+  // si ya había un área elegida (por ejemplo, después de Actualizar), la vuelve a mostrar con los datos frescos
+  if (window._areaRankingActiva && areasConDatos.includes(window._areaRankingActiva)) {
+    mostrarRankingArea(window._areaRankingActiva);
+  }
+}
+
+function mostrarRankingArea(area) {
+  window._areaRankingActiva = area;
+  document.querySelectorAll('.btn-ranking-area').forEach(b => {
+    b.style.opacity = b.dataset.area === area ? '1' : '.55';
+  });
+  const filas = (window._rows || [])
+    .filter(r => r.area === area && r.efsem > 0)
+    .sort((a, b) => b.efsem - a.efsem);
+  const esPareja = area === 'DOBLADO' || area === 'PLANCHA';
+  const filasHtml = filas.map((r, i) => {
+    const cs = effColor(r.efsem);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid #eee;font-size:13px">
+      <div><span style="color:${STONE};font-weight:bold;margin-right:8px;display:inline-block;width:20px">#${i + 1}</span>${r.oper || r.cod} <span style="color:${STONE};font-size:11px">· ${r.grupo}</span></div>
+      <div style="font-weight:bold;padding:2px 10px;border-radius:10px;background:${cs.bg};color:${cs.fg}">${(r.efsem * 100).toFixed(0)}%</div>
+    </div>`;
+  }).join('');
+  $('rankingResultado').innerHTML = `
+    <div style="padding:8px 12px;background:${PETROLEO};color:#fff;font-weight:bold;font-size:13px">Ranking de eficiencia — ${area}</div>
+    ${esPareja ? `<div style="padding:6px 12px;font-size:11px;color:${STONE};background:#FEF3DD">En ${area} se digita por módulo (pareja) — el % es del módulo completo, por eso ambas integrantes salen con el mismo número. No es un error.</div>` : ''}
+    ${filasHtml || `<p style="padding:12px;color:${STONE}">Sin datos esta semana.</p>`}
+  `;
+  $('rankingResultado').classList.remove('hidden');
+}
+
 function agruparPorModuloParaVistas() {
   const rows = window._rows || [];
   const grupos = {};
