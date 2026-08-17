@@ -50,6 +50,14 @@
     gap: 18px;
     align-items: start;
   }
+  /* Orden visual de los 4 paneles dentro de la grilla (ver nota en el HTML).
+     El HTML los declara como Producción, Sistema, Prorrateo, Rechazo; aquí
+     se reordenan para que queden Producción | Rechazo arriba y
+     Sistema | Prorrateo abajo, sin mover el marcado. */
+  #panel-produccion { order: 1; }
+  #panel-rechazo    { order: 2; }
+  #panel-sistema    { order: 3; }
+  #panel-prorrateo  { order: 4; }
   @media (max-width: 900px) {
     .grid-formulario { grid-template-columns: 1fr; }
   }
@@ -492,11 +500,18 @@
       <div class="resultado-leyenda" id="leyenda-sistema-lectura">Estos números ya están guardados (vienen de lo digitado en Producción) — esta pantalla es solo para leer y pasar al sistema externo, aquí no se escribe nada.</div>
     </div>
   </section>
-  </div>
 
-  <!-- PRORRATEO (solo DOBLADO) -- aparte de "Sistema" y a todo el ancho a
-       propósito: tiene 7 columnas de días y se ve mal encajada en una
-       columna angosta junto a Producción. -->
+  <!-- 17-ago-2026: PRORRATEO y RECHAZO ahora viven DENTRO de la grilla de
+       dos columnas, junto a Producción y Sistema. Antes estaban fuera, a
+       ancho completo y apilados debajo -- Lady tenía que bajar toda la
+       pantalla cada vez que quería registrar un rechazo, que en DOBLADO es
+       constante. El orden VISUAL lo da la regla `order` del CSS (no el
+       orden del HTML, que se dejó igual a propósito para no mover bloques
+       grandes de marcado y arriesgar el código que los usa):
+         fila 1: Producción | Rechazo
+         fila 2: Sistema    | Prorrateo
+       En PLANCHA/VAPOR/ENCAJADO, Rechazo y Prorrateo siguen ocultos y la
+       grilla queda exactamente como antes: Producción | Sistema. -->
   <section class="panel" id="panel-prorrateo" style="display:none">
     <div class="panel-titulo">Prorrateo para Sistema</div>
     <div id="sistema-doblado">
@@ -576,6 +591,7 @@
     <button class="guardar" data-tipo="rechazo">Agregar rechazo</button>
     <div class="aviso" id="aviso-rechazo"></div>
   </section>
+  </div>
 
   <div class="lista-hoy">
     <h3><span id="titulo-lista-hoy">Agregado en esta sesión</span> (<span id="contador-hoy">0</span>)</h3>
