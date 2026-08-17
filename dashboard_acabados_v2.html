@@ -41,6 +41,15 @@
   tr:nth-child(even) td{background:#F6F9F8}
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;color:#fff}
+  .chipmod{display:block;margin-top:2px;font-size:9px;font-weight:bold;letter-spacing:.3px;
+    background:#FDF0D9;color:#8a6d2e;border-radius:3px;padding:1px 3px;line-height:1.3}
+  .chipmod.otra{background:#EDEBFB;color:#4a3f9e}
+  .badgecambio{display:inline-block;margin-left:5px;background:#FDF0D9;color:#8a6d2e;
+    font-size:10px;font-weight:bold;border-radius:8px;padding:1px 6px}
+  .cambios-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+  .cambios-tbl th{background:var(--petroleo);color:#fff;font-weight:bold;text-align:left;padding:6px 8px;font-size:11px}
+  .cambios-tbl td{padding:6px 8px;border-bottom:1px solid #E4EBE9}
+  .cambios-tbl tr:nth-child(even) td{background:#F7FAF9}
   .scroll{max-height:420px;overflow:auto;border-radius:8px;border:1px solid var(--line)}
   .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
   .tab{padding:7px 16px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--stone);
@@ -113,6 +122,7 @@
         <div class="scroll">
           <table id="tbl"><thead></thead><tbody></tbody></table>
         </div>
+        <div id="panelCambios" style="margin-top:12px"></div>
         <div class="legend">La celda de eficiencia se pinta verde ≥85%, ámbar 70–84%, rosa &lt;70%. El incentivo diario ya considera la curva y el básico de cada trabajador. La columna % Rechazo Audit. solo aplica a DOBLADO (viene de AUDITORIA DOB). Desde que la digitación pasó a ser por módulo (no por persona), las columnas de % Efic diario y Prendas de esta tabla pueden salir en 0 para trabajadores de módulos con 2+ integrantes — el incentivo en soles sigue siendo exacto. Para ver la producción real por pareja/módulo, usa la pestaña <b>POR MÓDULO</b>. El <b>% Efic Sem</b> del módulo usa el mismo criterio que la vista individual (promedio de las eficiencias diarias, ya topadas), por eso una pareja de dos operarias al 77% da 77% y no un número inflado. La columna <b>Prendas total</b> suma producidas + rechazadas (las rechazadas solo existen en DOBLADO, vienen de AUDITORIA DOB).</div>
         <div class="legend" id="legend-exportar" style="margin-top:4px">"Exportar vista a Excel" descarga TODAS/PLANCHA/VAPOR/DOBLADO/ENCAJADO según la pestaña que tengas abierta arriba (no exporta la vista "POR MÓDULO", esa se ve solo en pantalla por ahora). El Excel trae 2 pestañas: <b>RESUMEN</b> (los números finales) y <b>REGISTROS</b> (lo que se digitó esa semana, ordenado y legible) — sirve de respaldo antes de limpiar datos del Sheet.</div>
       </div>
@@ -373,6 +383,7 @@ function renderHistorico(data) {
 
   const rows = data.rows || [];
   window._rows = rows;
+  anotarModulosPorDia(rows); // si la semana archivada no trae grupoDaily, degrada solo: no marca nada
   window._pdasPorGrupo = {}; window._efPondPorGrupo = {}; window._rechPdasPorGrupo = {};
   (data.grupos || []).forEach(g => { window._pdasPorGrupo[g.grupo] = g.pdas; window._efPondPorGrupo[g.grupo] = g.efPond; if (g.rech != null) window._rechPdasPorGrupo[g.grupo] = g.rech; });
   window._prendasPorModuloDia = data.prendasPorModuloDia || {};
@@ -509,7 +520,15 @@ function render(data){
     }
     const daily=[]; for(let d=0;d<7;d++) daily.push(num(ef[i][4+d*4+3]));
     const grupo=ef[i][3]||'';
-    rows.push({cod,oper:ef[i][1]||'',area,grupo,
+    // 15-ago-2026: modulo REAL por dia, desde EFICIENCIAS!AN:AT (indices
+    // 39..45), que calcularModuloPorDiaTodos() ya deja escrito en el Sheet
+    // en cada carga. Antes el dashboard solo leia la columna D (GRUPO =
+    // modulo ACTUAL), asi que si alguien apoyaba un dia en otro modulo, o
+    // cambiaba de modulo a mitad de semana, la tabla mostraba siempre el
+    // ultimo modulo para todos los dias -- el apoyo era invisible. El dato
+    // ya venia viajando en la respuesta del backend; solo faltaba leerlo.
+    const grupoDaily=[]; for(let d=0;d<7;d++) grupoDaily.push(String(ef[i][39+d]||'').trim());
+    rows.push({cod,oper:ef[i][1]||'',area,grupo,grupoDaily,
       pdas:num(ef[i][COL.pdas]),efsem:num(ef[i][COL.efsem]),
       mprod:num(ef[i][COL.mprod]),masist:num(ef[i][COL.masist]),improd:num(ef[i][COL.improd]),daily,
       rechazo: area==='DOBLADO' ? (rechazoPorGrupo[grupo]||0) : null});
@@ -591,6 +610,7 @@ function render(data){
 
   // ---- Tabla por trabajador con tabs
   window._rows=rows;
+  anotarModulosPorDia(rows); // marca los dias en otro modulo -- no altera ningun calculo
   window._pdasPorGrupo=pdasPorGrupo;
   window._rechPdasPorGrupo=rechPdasPorGrupo;
   window._efPondPorGrupo=efPondPorGrupo;
@@ -613,6 +633,113 @@ function render(data){
 
 function effColor(e){ if(e>=.85)return {bg:'#E3F2EE',fg:'#0E3B36'}; if(e>=.70)return {bg:'#FEF3DD',fg:'#8a6d2e'}; return {bg:'#FBE6E6',fg:'#a33'}; }
 
+// ============================================================
+// MÓDULO POR DÍA (15-ago-2026)
+// ============================================================
+// Lady ya digita, día por día, quién trabajó en qué módulo -- cuando una
+// operaria apoya un día en otro módulo (o cambia de módulo a mitad de
+// semana), eso queda registrado en HISTORIAL_MODULOS y el backend lo
+// resuelve en EFICIENCIAS!AN:AT. El problema era solo de LECTURA: esta
+// tabla mostraba una única columna "Grupo" con el módulo ACTUAL, igual
+// para los 7 días, así que el apoyo no se veía por ningún lado y el módulo
+// salía desactualizado.
+//
+// Esto NO cambia ningún cálculo: eficiencias, incentivos y prendas siguen
+// saliendo exactamente de donde salían antes. Solo agrega la marca visual
+// del día en que la persona estuvo en otro módulo.
+//
+// Referencia de comparación = r.grupo (EFICIENCIAS!D, el módulo actual),
+// a propósito: es el mismo con el que se buscan Prendas y % Rechazo en el
+// resto de la fila, así que lo que se marca como "distinto" es coherente
+// con el resto de la tabla. Si viniera vacío, cae al módulo que más días
+// aparece esa semana.
+function anotarModulosPorDia(rows){
+  (rows||[]).forEach(r=>{
+    const gd = Array.isArray(r.grupoDaily) ? r.grupoDaily.slice(0,7).map(m=>String(m||'').trim()) : [];
+    while(gd.length<7) gd.push('');
+    r.grupoDaily = gd;
+    const cuenta={};
+    gd.forEach(m=>{ if(m) cuenta[m]=(cuenta[m]||0)+1; });
+    let pred='', max=0;
+    Object.keys(cuenta).forEach(m=>{ if(cuenta[m]>max){ max=cuenta[m]; pred=m; } });
+    r.grupoRef = r.grupo || pred || '';
+    r.cambios = [];
+    if(!r.grupoRef) return;
+    for(let d=0;d<7;d++){
+      const m=gd[d];
+      if(m && m!==r.grupoRef){
+        r.cambios.push({dia:d, modulo:m, trabajo:!!(r.daily && r.daily[d]>0)});
+      }
+    }
+  });
+}
+
+// Celda de un día: el % de eficiencia como siempre, y debajo el módulo SOLO
+// si ese día la persona estuvo en uno distinto al suyo.
+function celdaDia(r, d){
+  const v = (r.daily && r.daily[d]) || 0;
+  const mod = (r.grupoDaily && r.grupoDaily[d]) || '';
+  const distinto = mod && r.grupoRef && mod !== r.grupoRef;
+  // Ámbar = otro módulo de su misma área; violeta = otro proceso (otra área).
+  const otraArea = distinto && !mismaFamiliaModulo(mod, r.grupoRef);
+  const chip = distinto
+    ? `<span class="chipmod${otraArea?' otra':''}" title="Ese día trabajó en ${mod}">${mod}</span>`
+    : '';
+  if(v<=0){
+    const txt = distinto ? '·' : '—';
+    const tip = distinto ? 'Estuvo en otro módulo ese día' : 'Sin producción registrada ese día';
+    return `<td class="num" style="color:#bbb" title="${tip}">${txt}${chip}</td>`;
+  }
+  const c=effColor(v);
+  return `<td class="num" style="background:${c.bg};color:${c.fg};font-weight:bold">${(v*100).toFixed(0)}%${chip}</td>`;
+}
+
+// Dos módulos son "de la misma familia" si comparten prefijo (DOB-M6 y
+// DOB-M2 sí; PL-1 y DOB-M6 no). Sirve solo para elegir el color del chip.
+function mismaFamiliaModulo(a,b){
+  const pref=s=>String(s).split('-')[0];
+  return pref(a)===pref(b);
+}
+
+// Panel debajo de la tabla con la lista plana de apoyos/cambios de la
+// semana. Es lo que permite auditar: si aparece un movimiento que nadie
+// recuerda, es un error de digitación de módulo y hay que corregirlo.
+function renderPanelCambios(rowsVisibles){
+  const cont=$('panelCambios');
+  if(!cont) return;
+  const eventos=[];
+  (rowsVisibles||[]).forEach(r=>{
+    (r.cambios||[]).forEach(c=>{
+      eventos.push({dia:c.dia, oper:r.oper||r.cod, area:r.area, de:r.grupoRef, a:c.modulo, trabajo:c.trabajo});
+    });
+  });
+  if(!eventos.length){ cont.innerHTML=''; return; }
+  eventos.sort((x,y)=> x.dia-y.dia || String(x.oper).localeCompare(String(y.oper),'es'));
+  const filas=eventos.map(e=>`<tr>
+    <td style="font-weight:bold">${DAYS[e.dia]||('D'+(e.dia+1))}</td>
+    <td>${e.oper}</td>
+    <td><span class="tag" style="background:${areaColor(e.area)}">${e.area}</span></td>
+    <td style="color:var(--stone)">${e.de}</td>
+    <td style="font-weight:bold;color:#8a6d2e">${e.a}</td>
+    <td>${e.trabajo?'Con producción':'Sin producción ese día'}</td>
+  </tr>`).join('');
+  cont.innerHTML=`
+    <div style="border:1px solid #E4EBE9;border-radius:8px;padding:12px 14px;background:#fff">
+      <div style="font-weight:bold;color:var(--petroleo);font-size:14px">
+        Apoyos y cambios de módulo esta semana (${eventos.length})
+      </div>
+      <div class="legend" style="margin-top:2px">
+        Días en que una persona estuvo en un módulo distinto al suyo, según la digitación de Lady.
+        No cambia ningún número de la tabla: es la explicación de por qué un módulo pudo rendir
+        distinto ese día. Si aquí aparece algo que no ocurrió, el módulo quedó mal digitado ese día.
+      </div>
+      <table class="cambios-tbl">
+        <tr><th>Día</th><th>Trabajador</th><th>Área</th><th>Su módulo</th><th>Trabajó en</th><th>Estado</th></tr>
+        ${filas}
+      </table>
+    </div>`;
+}
+
 function fillTable(area){
   const rows=window._rows.filter(r=>area==='TODAS'||r.area===area)
     .sort((a,b)=> a.area.localeCompare(b.area)
@@ -622,19 +749,19 @@ function fillTable(area){
   $('tbl').querySelector('thead').innerHTML='<tr>'+head.map((h,i)=>
     `<th class="${i>=3?'num':''}">${h}</th>`).join('')+'</tr>';
   $('tbl').querySelector('tbody').innerHTML=rows.map(r=>{
-    const days=r.daily.map(d=>{
-      if(d<=0)return '<td class="num" style="color:#bbb">—</td>';
-      const c=effColor(d);
-      return `<td class="num" style="background:${c.bg};color:${c.fg};font-weight:bold">${(d*100).toFixed(0)}%</td>`;
-    }).join('');
+    const days=r.daily.map((_,d)=>celdaDia(r,d)).join('');
     const cs=effColor(r.efsem);
+    const nCambios=(r.cambios||[]).length;
+    const badge=nCambios
+      ? `<span class="badgecambio" title="${nCambios} día(s) en otro módulo">+${nCambios}</span>`
+      : '';
     const rechazoCell = r.rechazo===null
       ? '<td class="num" style="color:#bbb">—</td>'
       : `<td class="num" style="color:${r.rechazo>0.5?'#a33':'#333'};font-weight:${r.rechazo>0.5?'bold':'normal'}">${(r.rechazo*100).toFixed(0)}%</td>`;
     return `<tr>
       <td>${r.oper||r.cod}</td>
       <td><span class="tag" style="background:${areaColor(r.area)}">${r.area}</span></td>
-      <td style="color:${STONE}">${r.grupo}</td>
+      <td style="color:${STONE}">${r.grupoRef||r.grupo}${badge}</td>
       ${days}
       <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(r.efsem*100).toFixed(0)}%</td>
       <td class="num">${(r.pdas + ((window._rechPdasPorGrupo&&window._rechPdasPorGrupo[r.grupo])||0)).toLocaleString('es-PE')}</td>
@@ -642,6 +769,7 @@ function fillTable(area){
       <td class="num" style="font-weight:bold;color:${PETROLEO}">${r.inc.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
     </tr>`;
   }).join('');
+  renderPanelCambios(rows);
 }
 function areaColor(a){return {PLANCHA:PETROLEO,VAPOR:SLATE,DOBLADO:MONETARIO,ENCAJADO:ESMERALDA}[a]||STONE;}
 
@@ -680,6 +808,7 @@ function fillTablaPorModulo(){
       <td class="num" style="font-weight:bold;color:${PETROLEO}">${g.inc.toLocaleString('es-PE',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
     </tr>`;
   }).join('');
+  renderPanelCambios(window._rows);
 }
 
 // 13-ago-2026: helper compartido por "Vista Excel" y "Reporte" -- misma
