@@ -599,6 +599,7 @@
   </div>
 
   <div class="zona-peligro">
+    <button type="button" id="btn-cerrar-semana" style="background:#DC2626;margin-bottom:10px">🔒 Cerrar semana</button>
     <button type="button" id="btn-limpiar-todo">🧹 Borrar datos de prueba y empezar de cero</button>
   </div>
 
@@ -1716,6 +1717,54 @@
     $('contador-hoy').textContent = contador;
     items.forEach(it => crearItemDOM(it.tipo, it.etiqueta, it.hoja, it.fila, it.payload));
   }
+
+  // --- Cerrar semana (19-ago-2026) ---
+  // Se movió aquí desde el dashboard, a pedido de Christian: el dashboard
+  // queda de solo lectura y todas las acciones administrativas que ESCRIBEN
+  // o BORRAN viven en el formulario, junto a "Borrar datos de prueba".
+  // La lógica es idéntica a la que tenía el dashboard: mismo código de
+  // administrador, misma confirmación de que ya se exportó el Excel, y el
+  // mismo payload { tipo: 'cerrarSemana' } al backend -- no cambia nada de
+  // lo que hace el Apps Script.
+  $('btn-cerrar-semana').addEventListener('click', () => {
+    const codigo = prompt('Código de administrador:');
+    if (codigo !== 'LIVES2026') { if (codigo !== null) alert('Código incorrecto.'); return; }
+
+    const yaExporto = confirm(
+      '¿Ya exportaste el Excel de ESTA semana desde el dashboard? (botón "📥 Exportar vista a Excel")\n\n' +
+      'Es necesario porque este proceso va a BORRAR los registros crudos de esta ' +
+      'semana en PRODUCCION MODULO / SISTEMA DOB / AUDITORIA DOB — si no exportaste, cancela y hazlo primero.'
+    );
+    if (!yaExporto) { alert('Cancelado. Exporta primero desde el dashboard, luego vuelve a intentar cerrar semana.'); return; }
+
+    const ok = confirm(
+      '¿Confirmas cerrar esta semana?\n\n' +
+      '1) Archiva el resumen actual a HISTORIAL (queda guardado para siempre).\n' +
+      '2) Libera las asignaciones de módulo en TRABAJADORES (la semana nueva arranca sin integrantes).\n' +
+      '3) Borra los registros crudos SOLO de esta semana en PRODUCCION MODULO / SISTEMA DOB / AUDITORIA DOB ' +
+      '(las semanas anteriores quedan intactas).\n\n' +
+      'Esta acción no se puede deshacer.'
+    );
+    if (!ok) return;
+
+    const btn = $('btn-cerrar-semana');
+    btn.disabled = true;
+    btn.textContent = 'Cerrando...';
+    fetch(URL_APPS_SCRIPT, { method: 'POST', body: JSON.stringify({ tipo: 'cerrarSemana', codigoAdmin: codigo, confirmoExporte: true }) })
+      .then(r => r.json())
+      .then(res => {
+        if (res.ok) {
+          alert(res.mensaje + '\n\nRecuerda: todavía debes cambiar la fecha de la semana en PARAMETROS y pegar el HO nuevo antes de digitar la semana nueva.');
+        } else {
+          alert('No se pudo cerrar la semana: ' + (res.error || 'error desconocido'));
+        }
+      })
+      .catch(() => alert('No se pudo conectar. Revisa tu internet e intenta de nuevo antes de reintentar (para no duplicar el archivo en HISTORIAL).'))
+      .finally(() => {
+        btn.disabled = false;
+        btn.textContent = '🔒 Cerrar semana';
+      });
+  });
 
   // --- Zona de peligro: borrar todos los datos de prueba ---
   $('btn-limpiar-todo').addEventListener('click', () => {
