@@ -19,9 +19,19 @@
   .header svg{height:30px;width:auto}
   .header .t{font-size:18px;font-weight:bold;letter-spacing:.5px}
   .header .sub{margin-left:auto;font-size:13px;color:#EAF3F1;text-align:right}
-  .header button.refresh{background:var(--esmeralda);color:#fff;border:none;border-radius:6px;
-    padding:8px 14px;font-size:13px;font-weight:bold;cursor:pointer;white-space:nowrap}
-  .header button.refresh:disabled{opacity:.6;cursor:wait}
+  /* 19-ago-2026: este estilo estaba atado a ".header button.refresh". Al mover
+     los botones fuera del header (barra de controles), perdieron el formato y
+     quedaron con la apariencia cruda del navegador. Ahora es global, asi que
+     cualquier boton .refresh se ve igual este donde este -- incluye tambien
+     "Exportar vista a Excel" y "Exportar como imagen", que nunca estuvieron en
+     el header y por eso venian sin estilo desde antes. */
+  button.refresh{background:var(--esmeralda);color:#fff;border:none;border-radius:999px;
+    padding:9px 18px;font-size:13px;font-weight:bold;font-family:inherit;letter-spacing:.3px;
+    cursor:pointer;white-space:nowrap;box-shadow:0 2px 6px rgba(14,59,54,.16);
+    transition:transform .12s ease,box-shadow .16s ease,filter .16s ease}
+  button.refresh:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(14,59,54,.22);filter:brightness(1.07)}
+  button.refresh:active{transform:translateY(0);box-shadow:0 1px 4px rgba(14,59,54,.18)}
+  button.refresh:disabled{opacity:.55;cursor:wait;transform:none;box-shadow:none;filter:none}
   .wrap{max-width:1200px;margin:0 auto;padding:22px 20px 60px}
   .hidden{display:none}
   .loading{text-align:center;color:var(--stone);padding:60px 20px;font-size:14px}
@@ -45,9 +55,11 @@
   @media(max-width:640px){.chip-grafico{margin-left:0}}
   .barra-controles{display:flex;gap:10px;flex-wrap:wrap;align-items:center;
     background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
-  .barra-controles select{padding:9px 12px;border-radius:8px;border:1px solid var(--line);
+  .barra-controles select{padding:9px 16px;border-radius:999px;border:1.5px solid var(--line);
     font-size:13px;font-weight:bold;color:#0E3B36;background:#fff;flex:1 1 240px;max-width:340px;
-    font-family:inherit;cursor:pointer}
+    font-family:inherit;cursor:pointer;transition:border-color .16s ease,box-shadow .16s ease}
+  .barra-controles select:hover{border-color:var(--esmeralda);box-shadow:0 2px 8px rgba(14,59,54,.12)}
+  .barra-controles select:focus{outline:none;border-color:var(--esmeralda);box-shadow:0 0 0 3px rgba(16,185,129,.18)}
   .barra-controles .refresh{flex:0 0 auto}
   @media(max-width:640px){.barra-controles select{max-width:none}
     .barra-controles .refresh{flex:1 1 auto}}
@@ -84,7 +96,7 @@
   .footer{color:var(--stone);font-size:12px;text-align:center;margin-top:26px}
   .err{background:#fdecea;border:1px solid var(--alerta);color:#a33;padding:12px 16px;border-radius:8px;margin-top:14px}
   .legend{font-size:11px;color:var(--stone);margin-top:6px}
-  @media print{.header .refresh{display:none}.header{position:static}body{background:#fff}}
+  @media print{button.refresh,.barra-controles{display:none}.header{position:static}body{background:#fff}}
 </style>
 </head>
 <body>
@@ -139,7 +151,7 @@
     </div>
 
     <div class="panel">
-      <h3>Detalle por trabajador <button class="refresh" id="btnExportar" style="float:right;background:var(--monetario);font-size:12px;padding:6px 12px">📥 Exportar vista a Excel</button></h3>
+      <h3>Detalle por trabajador <button class="refresh" id="btnExportar" style="float:right;background:var(--monetario);font-size:12px;padding:7px 16px;margin-top:-4px">📥 Exportar vista a Excel</button></h3>
 
       <div class="tabs" id="tabsFormato" style="margin-bottom:10px">
         <div class="tab on" data-f="normal">📋 Detalle normal</div>
@@ -1032,7 +1044,7 @@ function renderVistaReporte() {
     html += `<div id="reporteSeccion${idx}" style="margin-bottom:22px;background:#fff;padding:4px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div style="font-size:15px;font-weight:bold;color:${PETROLEO}">${sec.titulo}</div>
-        <button type="button" class="refresh boton-exportar-seccion" data-id="reporteSeccion${idx}" data-area="${sec.area}" style="background:${MONETARIO};font-size:11px;padding:5px 10px">📷 Exportar como imagen</button>
+        <button type="button" class="refresh boton-exportar-seccion" data-id="reporteSeccion${idx}" data-area="${sec.area}" style="background:${MONETARIO};font-size:11px;padding:6px 14px">📷 Exportar como imagen</button>
       </div>
       <table><tr>${headCols.map(h => `<th>${h}</th>`).join('')}</tr>${filas}</table>
     </div>`;
