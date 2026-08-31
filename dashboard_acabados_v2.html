@@ -413,7 +413,13 @@ function renderHistorico(data) {
     r.daily.forEach((v, d) => { if (v > 0) { b.daily[d] += v; b.dcount[d]++; } });
   });
   const effPond = a => { const b = byArea[a]; const den = b.masist - b.improd; return den > 0 ? b.mprod / den : 0; };
-  const effDayAvg = (a, d) => { const b = byArea[a]; return b.dcount[d] > 0 ? b.daily[d] / b.dcount[d] : 0; };
+  // 20-ago-2026: antes devolvia 0 cuando NADIE trabajo ese dia, y el grafico
+  // dibujaba una caida a cero -- parecia un desplome de eficiencia cuando en
+  // realidad no hubo jornada (feriado, domingo, paro de planta). Ahora
+  // devuelve null: Chart.js no dibuja ese punto y, con spanGaps, une la linea
+  // entre los dias que si tuvieron trabajo. Un dia en que SI hubo gente pero
+  // rindieron 0% sigue mostrandose como 0% -- ese cero es real y debe verse.
+  const effDayAvg = (a, d) => { const b = byArea[a]; return b.dcount[d] > 0 ? b.daily[d] / b.dcount[d] : null; };
   const effSimple = a => { const rs = rows.filter(r => r.area === a && r.efsem > 0); return rs.length ? rs.reduce((s, r) => s + r.efsem, 0) / rs.length : 0; };
 
   const areasActivas = AREAS.filter(a => byArea[a].mprod > 0);
@@ -446,10 +452,11 @@ function renderHistorico(data) {
     { plugins: { legend: { position: 'right' }, tooltip: { callbacks: { label: c => c.label + ': S/ ' + c.parsed.toLocaleString('es-PE', { minimumFractionDigits: 2 }) } } } });
 
   mkChart('chDay', 'line', { labels: DAYS, datasets: areasActivas.map((a, i) => ({
-      label: a, data: DAYS.map((_, d) => +(effDayAvg(a, d) * 100).toFixed(1)),
-      borderColor: SERIES[i], backgroundColor: SERIES[i], tension: .3, pointRadius: 3, fill: false })) },
-    { scales: { y: { beginAtZero: true, ticks: { callback: v => v + '%' }, grid: { color: '#eee' } }, x: { grid: { display: false } } },
-      plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.parsed.y + '%' } } } });
+      label: a, data: DAYS.map((_, d) => { const v = effDayAvg(a, d); return v === null ? null : +(v * 100).toFixed(1); }),
+      borderColor: SERIES[i], backgroundColor: SERIES[i], tension: .3, pointRadius: 3, fill: false,
+      spanGaps: true, segment: TRAMO_SIN_JORNADA })) },
+    { scales: { y: { beginAtZero: true, ticks: { callback: v => v + '%' }, grid: { color: '#eee' } }, x: ejeDias(diasSinJornada(areasActivas, effDayAvg)) },
+      plugins: { legend: { position: 'bottom' }, tooltip: { callbacks: { label: c => c.parsed.y === null ? c.dataset.label + ': sin jornada' : c.dataset.label + ': ' + c.parsed.y + '%' } } } });
 
   const tabs = ['TODAS', ...AREAS, 'POR MÓDULO'];
   $('tabs').innerHTML = tabs.map((t, i) => `<div class="tab ${i === 0 ? 'on' : ''}" data-a="${t}">${t}</div>`).join('');
@@ -566,7 +573,7 @@ function render(data){
     r.daily.forEach((v,d)=>{ if(v>0){b.daily[d]+=v;b.dcount[d]++;} });
   });
   const effPond=a=>{const b=byArea[a];const den=b.masist-b.improd;return den>0?b.mprod/den:0;};
-  const effDayAvg=(a,d)=>{const b=byArea[a];return b.dcount[d]>0?b.daily[d]/b.dcount[d]:0;};
+  const effDayAvg=(a,d)=>{const b=byArea[a];return b.dcount[d]>0?b.daily[d]/b.dcount[d]:null;}; // null = sin jornada (ver nota en la vista historica)
   const effSimple=a=>{const rs=rows.filter(r=>r.area===a&&r.efsem>0);return rs.length?rs.reduce((s,r)=>s+r.efsem,0)/rs.length:0;};
 
   // ---- KPIs
@@ -608,10 +615,11 @@ function render(data){
 
   // ---- Chart eficiencia diaria — solo áreas activas
   mkChart('chDay','line',{labels:DAYS,datasets:areasActivas.map((a,i)=>({
-      label:a,data:DAYS.map((_,d)=>+(effDayAvg(a,d)*100).toFixed(1)),
-      borderColor:SERIES[i],backgroundColor:SERIES[i],tension:.3,pointRadius:3,fill:false}))},
-    {scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'},grid:{color:'#eee'}},x:{grid:{display:false}}},
-     plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'%'}}}});
+      label:a,data:DAYS.map((_,d)=>{const v=effDayAvg(a,d);return v===null?null:+(v*100).toFixed(1);}),
+      borderColor:SERIES[i],backgroundColor:SERIES[i],tension:.3,pointRadius:3,fill:false,
+      spanGaps:true,segment:TRAMO_SIN_JORNADA}))},
+    {scales:{y:{beginAtZero:true,ticks:{callback:v=>v+'%'},grid:{color:'#eee'}},x:ejeDias(diasSinJornada(areasActivas,effDayAvg))},
+     plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.parsed.y===null?c.dataset.label+': sin jornada':c.dataset.label+': '+c.parsed.y+'%'}}}});
 
   // ---- Tabla por trabajador con tabs
   window._rows=rows;
@@ -634,6 +642,26 @@ function render(data){
   renderBotonesRanking();
 
   $('content').classList.remove('hidden');
+}
+
+// 20-ago-2026: un dia sin jornada (feriado, domingo, paro) se dibuja como
+// HUECO, no como cero. Pero unir los dos extremos con linea llena haria
+// parecer que ese dia SI hubo un valor intermedio -- se cambiaria una caida
+// falsa por una continuidad falsa. Por eso el tramo que cruza el hueco va
+// PUNTEADO: la tendencia se sigue leyendo de un lado al otro, y el punteado
+// avisa que en el medio no se midio nada. Ademas, la etiqueta de ese dia en
+// el eje se atenua.
+const TRAMO_SIN_JORNADA = { borderDash: ctx => (ctx.p0.skip || ctx.p1.skip) ? [6, 5] : undefined };
+
+// Dias en que NINGUNA area activa tuvo jornada -- para atenuar su etiqueta.
+function diasSinJornada(areasActivas, effDayAvg) {
+  return Array.from({ length: 7 }, (_, d) =>
+    areasActivas.every(a => effDayAvg(a, d) === null));
+}
+
+function ejeDias(sinJornada) {
+  return { grid: { display: false },
+    ticks: { color: ctx => sinJornada[ctx.index] ? '#c2cdcb' : '#666' } };
 }
 
 function effColor(e){ if(e>=.85)return {bg:'#E3F2EE',fg:'#0E3B36'}; if(e>=.70)return {bg:'#FEF3DD',fg:'#8a6d2e'}; return {bg:'#FBE6E6',fg:'#a33'}; }
