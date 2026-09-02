@@ -420,19 +420,26 @@ function renderHistorico(data) {
   // entre los dias que si tuvieron trabajo. Un dia en que SI hubo gente pero
   // rindieron 0% sigue mostrandose como 0% -- ese cero es real y debe verse.
   const effDayAvg = (a, d) => { const b = byArea[a]; return b.dcount[d] > 0 ? b.daily[d] / b.dcount[d] : null; };
-  const effSimple = a => { const rs = rows.filter(r => r.area === a && r.efsem > 0); return rs.length ? rs.reduce((s, r) => s + r.efsem, 0) / rs.length : 0; };
+  // 21-ago-2026: ponderado, igual que la vista en vivo. data.porArea ya viene
+  // sumado por MODULO desde el backend (no por persona), asi que no duplica
+  // los modulos de pareja. Lo unico que no trae es el APOYO: HISTORIAL_GRUPOS_DIARIO
+  // no lo archivo nunca, asi que en semanas cerradas el denominador va sin el.
+  // La diferencia solo aparece en semanas que tuvieron apoyo registrado.
+  const effSimple = a => { const b = byArea[a]; const den = b.masist - b.improd; return den > 0 ? b.mprod / den : 0; };
 
   const areasActivas = AREAS.filter(a => byArea[a].mprod > 0);
   let totInc = 0; AREAS.forEach(a => { totInc += byArea[a].inc; });
-  const effsArea = areasActivas.map(a => effSimple(a)).filter(v => v > 0);
-  const effGeneral = effsArea.length ? effsArea.reduce((s, v) => s + v, 0) / effsArea.length : 0;
+  // Ponderado de toda el area, sin promediar las 4 areas entre si.
+  let gMp = 0, gDen = 0;
+  areasActivas.forEach(a => { const b = byArea[a]; gMp += b.mprod; gDen += b.masist - b.improd; });
+  const effGeneral = gDen > 0 ? gMp / gDen : 0;
   const nOper = rows.filter(r => r.efsem > 0 || r.mprod > 0 || r.pdas > 0).length;
   const gruposUnicos = [...new Set(rows.map(r => r.grupo).filter(Boolean))];
   let totProd = 0, totRech = 0;
   gruposUnicos.forEach(gp => { totProd += (window._pdasPorGrupo[gp] || 0); totRech += (window._rechPdasPorGrupo[gp] || 0); });
   const totPdas = totProd + totRech;
   const kpis = [
-    { n: (effGeneral * 100).toFixed(0) + '%', l: 'Eficiencia acabados (prom. áreas)' },
+    { n: (effGeneral * 100).toFixed(0) + '%', l: 'Eficiencia acabados (ponderada)' },
     { n: 'S/ ' + totInc.toLocaleString('es-PE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }), l: 'Incentivo total semana' },
     { n: totPdas.toLocaleString('es-PE'), l: (totRech > 0 ? 'Prendas totales (prod+rech)' : 'Prendas producidas') },
     { n: nOper, l: 'Trabajadores con actividad' },
@@ -485,7 +492,19 @@ function render(data){
   const pdasPorGrupo={};
   const rechPdasPorGrupo={};
   const efPondPorGrupo={};
-  const MP_COLS=[3,12,21,30,39,48,57], MA_COLS=[4,13,22,31,40,49,58], IM_COLS=[5,14,23,32,41,50,59];
+  // 21-ago-2026: se agrega AP_COLS (Apoyo). El denominador correcto, el mismo
+  // que Lady aprobo y que ya vive en EFICIENCIAS!AK, es:
+  //     Min Prod / (Min Asist + Apoyo - Improductivos)
+  // Antes el apoyo no entraba aqui, asi que la eficiencia ponderada del
+  // dashboard no coincidia con la del Sheet.
+  const MP_COLS=[3,12,21,30,39,48,57], MA_COLS=[4,13,22,31,40,49,58], IM_COLS=[5,14,23,32,41,50,59], AP_COLS=[6,15,24,33,42,51,60];
+  // Acumulados por AREA leidos desde GRUPOS (por modulo, una sola vez cada
+  // uno). No se pueden sacar de las filas por persona: EFICIENCIAS trae el
+  // Min Prod del MODULO repetido en cada integrante, asi que sumar por
+  // persona duplicaria los modulos de pareja.
+  const pondArea={}, pondAreaDia={};
+  AREAS.forEach(a=>{ pondArea[a]={mp:0,ma:0,im:0,ap:0};
+    pondAreaDia[a]=Array.from({length:7},()=>({mp:0,ma:0,im:0,ap:0})); });
   if(gr){
     for(let i=3;i<gr.length;i++){
       const grupo=gr[i][0], area=gr[i][1];
@@ -493,13 +512,23 @@ function render(data){
       pdasPorGrupo[grupo]=num(gr[i][67]); // BP Pdas Prod SEM, columna 68 (índice 67)
       rechPdasPorGrupo[grupo]=num(gr[i][68]); // BQ Pdas Rechazadas SEM, columna 69 (índice 68)
       if(area==='DOBLADO') rechazoPorGrupo[grupo]=num(gr[i][69]); // BR % RECHAZO, columna 70 (índice 69)
-      let mp=0,ma=0,im=0;
+      let mp=0,ma=0,im=0,ap=0;
       MP_COLS.forEach(c=>mp+=num(gr[i][c]));
       MA_COLS.forEach(c=>ma+=num(gr[i][c]));
       IM_COLS.forEach(c=>im+=num(gr[i][c]));
-      efPondPorGrupo[grupo]=(ma-im)>0?mp/(ma-im):0;
+      AP_COLS.forEach(c=>ap+=num(gr[i][c]));
+      efPondPorGrupo[grupo]=(ma+ap-im)>0?mp/(ma+ap-im):0;
+      if(pondArea[area]){
+        pondArea[area].mp+=mp; pondArea[area].ma+=ma; pondArea[area].im+=im; pondArea[area].ap+=ap;
+        for(let d=0;d<7;d++){
+          const t=pondAreaDia[area][d];
+          t.mp+=num(gr[i][MP_COLS[d]]); t.ma+=num(gr[i][MA_COLS[d]]);
+          t.im+=num(gr[i][IM_COLS[d]]); t.ap+=num(gr[i][AP_COLS[d]]);
+        }
+      }
     }
   }
+  window._pondArea=pondArea; window._pondAreaDia=pondAreaDia;
 
   // ---- ACTIVO: mapa cód -> activo (columna F de TRABAJADORES).
   // Solo aplica a la vista EN VIVO. Las semanas archivadas se leen de
@@ -572,17 +601,23 @@ function render(data){
     const b=byArea[r.area]; b.mprod+=r.mprod;b.masist+=r.masist;b.improd+=r.improd;b.inc+=r.inc;b.pdas+=r.pdas;b.n++;
     r.daily.forEach((v,d)=>{ if(v>0){b.daily[d]+=v;b.dcount[d]++;} });
   });
-  const effPond=a=>{const b=byArea[a];const den=b.masist-b.improd;return den>0?b.mprod/den:0;};
-  const effDayAvg=(a,d)=>{const b=byArea[a];return b.dcount[d]>0?b.daily[d]/b.dcount[d]:null;}; // null = sin jornada (ver nota en la vista historica)
-  const effSimple=a=>{const rs=rows.filter(r=>r.area===a&&r.efsem>0);return rs.length?rs.reduce((s,r)=>s+r.efsem,0)/rs.length:0;};
+  // 21-ago-2026: TODO ponderado, ningun promedio de porcentajes (pedido de
+  // Lady). effSimple quedo eliminado: promediaba los % de las personas y le
+  // daba el mismo peso a quien trabajo 2 horas que a quien trabajo 40.
+  const effPond=a=>{const t=pondArea[a];const den=t.ma+t.ap-t.im;return den>0?t.mp/den:0;};
+  const effDayAvg=(a,d)=>{const t=pondAreaDia[a][d];const den=t.ma+t.ap-t.im;return den>0?t.mp/den:null;}; // null = sin jornada
 
   // ---- KPIs
   // Áreas activas = las que tienen producción esta semana (excluye ENCAJADO u otra área sin digitar).
-  const areasActivas=AREAS.filter(a=>byArea[a].mprod>0);
+  const areasActivas=AREAS.filter(a=>pondArea[a].mp>0);
   let totInc=0; AREAS.forEach(a=>{totInc+=byArea[a].inc;});
-  // Eficiencia general = promedio simple de las eficiencias de las áreas activas (método acordado con Lady).
-  const effsArea=areasActivas.map(a=>effSimple(a)).filter(v=>v>0);
-  const effGeneral=effsArea.length?effsArea.reduce((s,v)=>s+v,0)/effsArea.length:0;
+  // Eficiencia general = ponderado de TODA el area de Acabados: se suman los
+  // minutos de todos los modulos y se divide UNA sola vez. No se promedian
+  // las 4 areas entre si -- eso tambien seria un promedio, y haria que VAPOR
+  // (chico) pesara igual que DOBLADO (grande).
+  let gMp=0,gDen=0;
+  areasActivas.forEach(a=>{const t=pondArea[a];gMp+=t.mp;gDen+=t.ma+t.ap-t.im;});
+  const effGeneral=gDen>0?gMp/gDen:0;
   // Trabajadores con actividad real (no los que están en 0 toda la semana).
   const nOper=rows.filter(r=>r.efsem>0||r.mprod>0||r.pdas>0).length;
   // Prendas a nivel MÓDULO (cada grupo se cuenta una sola vez -> evita el doble conteo
@@ -592,7 +627,7 @@ function render(data){
   gruposUnicos.forEach(gp=>{ totProd+=(pdasPorGrupo[gp]||0); totRech+=(rechPdasPorGrupo[gp]||0); });
   const totPdas=totProd+totRech;
   const kpis=[
-    {n:(effGeneral*100).toFixed(0)+'%',l:'Eficiencia acabados (prom. áreas)'},
+    {n:(effGeneral*100).toFixed(0)+'%',l:'Eficiencia acabados (ponderada)'},
     {n:'S/ '+totInc.toLocaleString('es-PE',{minimumFractionDigits:0,maximumFractionDigits:0}),l:'Incentivo total semana'},
     {n:totPdas.toLocaleString('es-PE'),l:'Prendas totales (prod+rech)'},
     {n:nOper,l:'Trabajadores con actividad'},
@@ -601,7 +636,7 @@ function render(data){
 
   // ---- Chart eficiencia por área (ponderada vs simple) — solo áreas activas
   const effPondV=areasActivas.map(a=>+(effPond(a)*100).toFixed(1));
-  const effSimpV=areasActivas.map(a=>+(effSimple(a)*100).toFixed(1));
+  const effSimpV=areasActivas.map(a=>+(effPond(a)*100).toFixed(1));
   mkChart('chEff','bar',{labels:areasActivas,datasets:[
       {label:'Ponderada',data:effPondV,backgroundColor:PETROLEO,borderRadius:4},
       {label:'Promedio simple',data:effSimpV,backgroundColor:WARM,borderRadius:4}]},
@@ -1022,11 +1057,13 @@ function renderVistaReporte() {
   if (!window._rows) return;
   const lista = agruparPorModuloParaVistas();
   const areasActivas = AREAS.filter(a => lista.some(g => g.area === a));
-  const effs = areasActivas.map(a => {
-    const gs = lista.filter(g => g.area === a && g.efMod > 0);
-    return gs.length ? gs.reduce((s, g) => s + g.efMod, 0) / gs.length : 0;
-  }).filter(v => v > 0);
-  const effGeneral = effs.length ? effs.reduce((a, b) => a + b, 0) / effs.length : 0;
+  // 21-ago-2026: ponderado, no promedio de modulos. Usa los mismos acumulados
+  // por area que el KPI de arriba, para que el Reporte y el encabezado del
+  // dashboard nunca muestren dos numeros distintos (antes salian 70% y 69%).
+  const pa = window._pondArea;
+  let gMp = 0, gDen = 0;
+  if (pa) areasActivas.forEach(a => { const t = pa[a]; if (t) { gMp += t.mp; gDen += t.ma + t.ap - t.im; } });
+  const effGeneral = gDen > 0 ? gMp / gDen : 0;
 
   const SECCIONES = [
     { area: 'DOBLADO', titulo: '1. Doblado', individual: false },
@@ -1037,7 +1074,7 @@ function renderVistaReporte() {
 
   let html = `<div style="background:#fff;border:1px solid ${STONE}22;border-radius:10px;padding:18px;display:inline-block;margin-bottom:20px">
     <div style="font-size:32px;font-weight:bold;color:${PETROLEO}">${(effGeneral * 100).toFixed(0)}%</div>
-    <div style="font-size:11px;color:${STONE};text-transform:uppercase">Eficiencia Acabados (prom. áreas)</div>
+    <div style="font-size:11px;color:${STONE};text-transform:uppercase">Eficiencia Acabados (ponderada)</div>
   </div>`;
 
   SECCIONES.forEach((sec, idx) => {
