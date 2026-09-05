@@ -352,6 +352,79 @@ if(ES_MOVIL){
   Chart.defaults.font.size=11;
   Chart.defaults.plugins.legend.labels.boxWidth=10;
 }
+
+// 22-ago-2026: etiquetas de valor dibujadas sobre el propio grafico.
+// LINEA: el estandar pide que el porcentaje se pueda leer sin pasar el mouse.
+// Como hay 3 series que casi se tocan, la etiqueta se alterna arriba/abajo
+// segun la serie y se omite si dos quedarian encima: legible antes que
+// completo. Los puntos nulos (dias sin jornada) no llevan etiqueta.
+const etiquetasLinea = {
+  id: 'etiquetasLinea',
+  afterDatasetsDraw(chart){
+    if(ES_MOVIL) return; // en celular no entran: queda el tooltip
+    const {ctx}=chart;
+    const puestos=[];
+    ctx.save();
+    ctx.font='bold 10px Calibri, Arial, sans-serif';
+    ctx.textAlign='center';
+    chart.data.datasets.forEach((ds,di)=>{
+      const meta=chart.getDatasetMeta(di);
+      if(meta.hidden) return;
+      meta.data.forEach((pt,i)=>{
+        const v=ds.data[i];
+        if(v===null||v===undefined) return;
+        const arriba = di%2===0;
+        const y = arriba ? pt.y-9 : pt.y+16;
+        // si ya hay una etiqueta muy cerca, se omite esta
+        if(puestos.some(p=>Math.abs(p.x-pt.x)<26 && Math.abs(p.y-y)<12)) return;
+        puestos.push({x:pt.x,y:y});
+        const txt=v+'%';
+        const w=ctx.measureText(txt).width;
+        ctx.fillStyle='rgba(255,255,255,.82)';
+        ctx.fillRect(pt.x-w/2-3, y-9, w+6, 12);
+        ctx.fillStyle=ds.borderColor;
+        ctx.fillText(txt, pt.x, y);
+      });
+    });
+    ctx.restore();
+  }
+};
+
+// DONUT: porcentaje dentro de cada porcion (solo si la porcion da espacio) y
+// el total al centro, como pide el estandar ("un solo numero grande al centro").
+const etiquetasDonut = {
+  id: 'etiquetasDonut',
+  afterDatasetsDraw(chart){
+    const {ctx}=chart;
+    const meta=chart.getDatasetMeta(0);
+    const datos=chart.data.datasets[0].data;
+    const total=datos.reduce((a,b)=>a+(+b||0),0);
+    if(!total) return;
+    ctx.save();
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    meta.data.forEach((arc,i)=>{
+      const p=(datos[i]||0)/total;
+      if(p<0.06) return; // porcion muy chica: el numero no entra
+      const ang=(arc.startAngle+arc.endAngle)/2;
+      const rad=(arc.innerRadius+arc.outerRadius)/2;
+      const x=arc.x+Math.cos(ang)*rad, y=arc.y+Math.sin(ang)*rad;
+      ctx.font='bold 13px Calibri, Arial, sans-serif';
+      ctx.fillStyle='#fff';
+      ctx.fillText(Math.round(p*100)+'%', x, y);
+    });
+    const c=meta.data[0];
+    if(c){
+      ctx.fillStyle='#5F726C';
+      ctx.font='11px Calibri, Arial, sans-serif';
+      ctx.fillText('Total', c.x, c.y-11);
+      ctx.fillStyle='#B45309';
+      ctx.font='bold 20px Calibri, Arial, sans-serif';
+      ctx.fillText('S/ '+Math.round(total).toLocaleString('es-PE'), c.x, c.y+7);
+    }
+    ctx.restore();
+  }
+};
+
 let charts={};
 
 const $=id=>document.getElementById(id);
@@ -1314,78 +1387,6 @@ document.querySelectorAll('#tabsFormato .tab').forEach(btn => {
     refrescarVistaFormatoActual();
   });
 });
-
-// 22-ago-2026: etiquetas de valor dibujadas sobre el propio grafico.
-// LINEA: el estandar pide que el porcentaje se pueda leer sin pasar el mouse.
-// Como hay 3 series que casi se tocan, la etiqueta se alterna arriba/abajo
-// segun la serie y se omite si dos quedarian encima: legible antes que
-// completo. Los puntos nulos (dias sin jornada) no llevan etiqueta.
-const etiquetasLinea = {
-  id: 'etiquetasLinea',
-  afterDatasetsDraw(chart){
-    if(ES_MOVIL) return; // en celular no entran: queda el tooltip
-    const {ctx}=chart;
-    const puestos=[];
-    ctx.save();
-    ctx.font='bold 10px Calibri, Arial, sans-serif';
-    ctx.textAlign='center';
-    chart.data.datasets.forEach((ds,di)=>{
-      const meta=chart.getDatasetMeta(di);
-      if(meta.hidden) return;
-      meta.data.forEach((pt,i)=>{
-        const v=ds.data[i];
-        if(v===null||v===undefined) return;
-        const arriba = di%2===0;
-        const y = arriba ? pt.y-9 : pt.y+16;
-        // si ya hay una etiqueta muy cerca, se omite esta
-        if(puestos.some(p=>Math.abs(p.x-pt.x)<26 && Math.abs(p.y-y)<12)) return;
-        puestos.push({x:pt.x,y:y});
-        const txt=v+'%';
-        const w=ctx.measureText(txt).width;
-        ctx.fillStyle='rgba(255,255,255,.82)';
-        ctx.fillRect(pt.x-w/2-3, y-9, w+6, 12);
-        ctx.fillStyle=ds.borderColor;
-        ctx.fillText(txt, pt.x, y);
-      });
-    });
-    ctx.restore();
-  }
-};
-
-// DONUT: porcentaje dentro de cada porcion (solo si la porcion da espacio) y
-// el total al centro, como pide el estandar ("un solo numero grande al centro").
-const etiquetasDonut = {
-  id: 'etiquetasDonut',
-  afterDatasetsDraw(chart){
-    const {ctx}=chart;
-    const meta=chart.getDatasetMeta(0);
-    const datos=chart.data.datasets[0].data;
-    const total=datos.reduce((a,b)=>a+(+b||0),0);
-    if(!total) return;
-    ctx.save();
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    meta.data.forEach((arc,i)=>{
-      const p=(datos[i]||0)/total;
-      if(p<0.06) return; // porcion muy chica: el numero no entra
-      const ang=(arc.startAngle+arc.endAngle)/2;
-      const rad=(arc.innerRadius+arc.outerRadius)/2;
-      const x=arc.x+Math.cos(ang)*rad, y=arc.y+Math.sin(ang)*rad;
-      ctx.font='bold 13px Calibri, Arial, sans-serif';
-      ctx.fillStyle='#fff';
-      ctx.fillText(Math.round(p*100)+'%', x, y);
-    });
-    const c=meta.data[0];
-    if(c){
-      ctx.fillStyle='#5F726C';
-      ctx.font='11px Calibri, Arial, sans-serif';
-      ctx.fillText('Total', c.x, c.y-11);
-      ctx.fillStyle='#B45309';
-      ctx.font='bold 20px Calibri, Arial, sans-serif';
-      ctx.fillText('S/ '+Math.round(total).toLocaleString('es-PE'), c.x, c.y+7);
-    }
-    ctx.restore();
-  }
-};
 
 function mkChart(id,type,data,opts,plugins){
   if(charts[id])charts[id].destroy();
