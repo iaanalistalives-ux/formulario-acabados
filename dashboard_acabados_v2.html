@@ -280,7 +280,7 @@
         </div>
         <div id="panelCambios" style="margin-top:12px"></div>
         <div class="legend">La celda de eficiencia se pinta verde ≥85%, ámbar 70–84%, rosa &lt;70%. El incentivo diario ya considera la curva y el básico de cada trabajador. La columna % Rechazo Audit. solo aplica a DOBLADO (viene de AUDITORIA DOB). Desde que la digitación pasó a ser por módulo (no por persona), las columnas de % Efic diario y Prendas de esta tabla pueden salir en 0 para trabajadores de módulos con 2+ integrantes — el incentivo en soles sigue siendo exacto. Para ver la producción real por pareja/módulo, usa la pestaña <b>POR MÓDULO</b>. El <b>% Efic Sem</b> del módulo usa el mismo criterio que la vista individual (promedio de las eficiencias diarias, ya topadas), por eso una pareja de dos operarias al 77% da 77% y no un número inflado. La columna <b>Prendas total</b> suma producidas + rechazadas (las rechazadas solo existen en DOBLADO, vienen de AUDITORIA DOB).</div>
-        <div class="legend" id="legend-exportar" style="margin-top:4px">"Exportar vista a Excel" descarga TODAS/PLANCHA/VAPOR/DOBLADO/ENCAJADO según la pestaña que tengas abierta arriba (no exporta la vista "POR MÓDULO", esa se ve solo en pantalla por ahora). El Excel trae 2 pestañas: <b>RESUMEN</b> (los números finales) y <b>REGISTROS</b> (lo que se digitó esa semana, ordenado y legible) — sirve de respaldo antes de limpiar datos del Sheet.</div>
+        <div class="legend" id="legend-exportar" style="margin-top:4px">"Exportar vista a Excel" descarga TODAS/PLANCHA/VAPOR/DOBLADO según la pestaña que tengas abierta arriba (no exporta la vista "POR MÓDULO", esa se ve solo en pantalla por ahora). El Excel trae 2 pestañas: <b>RESUMEN</b> (los números finales) y <b>REGISTROS</b> (lo que se digitó esa semana, ordenado y legible) — sirve de respaldo antes de limpiar datos del Sheet.</div>
       </div>
 
       <div id="vistaExcelDash" class="hidden">
@@ -320,7 +320,7 @@
 
   <div id="vistaMensual" class="hidden">
     <div class="panel"><span class="tira resultado"></span>
-      <h3>Eficiencia mensual / anual <span>promedio ponderado real (Σ Min Prod / Σ Min Asist), desde HISTORIAL — solo semanas ya archivadas</span></h3>
+      <h3>Eficiencia mensual / anual <span>ponderado: Σ Min Prod ÷ (Σ Min Asist − Σ Improductivos), desde HISTORIAL_GRUPOS_DIARIO — solo semanas ya archivadas. Encajado excluido: no se digita su producción.</span></h3>
       <div id="mensualContenido" style="overflow-x:auto">Cargando...</div>
     </div>
   <details class="help">
@@ -362,7 +362,14 @@ const PETROLEO='#0E3B36',ESMERALDA='#0F7A5A',SAGE_DARK='#0B815E',EMER='#10B981',
       MONETARIO='#B45309',SLATE='#4E6B78',ALERTA='#DC2626',TAN='#F59E0B',
       WARM='#DCE5E2',STONE='#5F726C';
 const SERIES=[MONETARIO,SLATE,EMER,ALERTA,TAN];
-const AREAS=['PLANCHA','VAPOR','DOBLADO','ENCAJADO'];
+// 25-ago-2026: ENCAJADO queda EXCLUIDO de todo el tablero, decision de
+// Christian y Lady. Motivo real, verificado en el Sheet: el area nunca tuvo
+// un solo registro en PRODUCCION MODULO -- ni esta semana ni en ninguna
+// archivada -- pero si carga horas (105,096 min solo en la semana 29). Al
+// entrar al denominador sin aportar nada al numerador, hundia la eficiencia
+// general de Acabados. Nadie la digita y Lady no la necesita todavia.
+// Cuando se empiece a digitar, basta con volver a agregarla a esta lista.
+const AREAS=['PLANCHA','VAPOR','DOBLADO'];
 const DAYS=['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM'];
 Chart.defaults.font.family='Calibri, Arial, sans-serif';
 Chart.defaults.font.size=12;
@@ -515,23 +522,28 @@ function cargarMensualAnual() {
         $('mensualContenido').innerHTML = '<p style="color:' + STONE + '">Todavía no hay semanas archivadas suficientes para armar esta vista — aparece sola a medida que se van cerrando semanas.</p>';
         return;
       }
-      const AREAS_COL = [['DOBLADO','DOB'],['PLANCHA','PL'],['VAPOR','VAP'],['ENCAJADO','ENC']];
+      // ACABADOS = ponderado general del mes, el mismo numero del KPI protagonista.
+      // No es el promedio de las 3 areas: lo calcula el backend sumando los
+      // minutos de todas y dividiendo una sola vez.
+      const AREAS_COL = [['DOBLADO','DOB'],['PLANCHA','PL'],['VAPOR','VAP'],['ACABADOS','ACABADOS']];
       const fmtPct = v => v === null ? '—' : (v * 100).toFixed(0) + '%';
       const cSty = 'padding:2px 9px;font-size:11px;border-bottom:1px solid #eee';
       const html = res.anios.map(anio => {
         const filas = res.meses.map(mes => {
           const d = res.datos[anio][mes];
           return `<tr><td style="text-align:left;color:${STONE};${cSty}">${mes}</td>` +
-            AREAS_COL.map(([full]) => `<td class="num" style="${cSty}">${fmtPct(d[full])}</td>`).join('') + '</tr>';
+            AREAS_COL.map(([full]) => `<td class="num" style="${cSty}${full==='ACABADOS'?';font-weight:bold;color:'+SAGE_DARK+';background:#F7FBFA':''}">${fmtPct(d[full])}</td>`).join('') + '</tr>';
         }).join('');
         const prom = res.datos[anio].PROMEDIO;
-        const filaProm = `<tr style="border-top:2px solid ${PETROLEO};font-weight:bold;background:#E3F2EE"><td style="text-align:left;${cSty}">PROMEDIO</td>` +
+        // La fila de cierre ya no es un promedio de meses: es el ponderado del
+        // año completo. Se renombra para que nadie la lea como un promedio.
+        const filaProm = `<tr style="border-top:2px solid ${PETROLEO};font-weight:bold;background:#E7F4EF"><td style="text-align:left;${cSty}">AÑO</td>` +
           AREAS_COL.map(([full]) => `<td class="num" style="${cSty}">${fmtPct(prom[full])}</td>`).join('') + '</tr>';
         return `<div style="display:inline-block;vertical-align:top;margin:0 16px 16px 0">
           <table style="width:auto;border-collapse:collapse">
             <thead><tr>
               <th style="background:${SLATE};${cSty};color:#fff;font-weight:bold">${anio}</th>
-              ${AREAS_COL.map(([,short])=>`<th style="${cSty};background:${PETROLEO};color:#fff;font-weight:bold">${short}</th>`).join('')}
+              ${AREAS_COL.map(([full,short])=>`<th style="${cSty};background:${full==='ACABADOS'?SAGE_DARK:PETROLEO};color:#fff;font-weight:bold">${short}</th>`).join('')}
             </tr></thead>
             <tbody>${filas}${filaProm}</tbody>
           </table>
@@ -1283,7 +1295,7 @@ function agruparPorModuloParaVistas() {
 function renderVistaExcel() {
   if (!window._rows) return;
   const DIAS_EXCEL = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
-  const ORDEN_EXCEL = ['DOBLADO', 'PLANCHA', 'VAPOR', 'ENCAJADO']; // mismo orden que el Excel real (BLOQUES_EXPORT)
+  const ORDEN_EXCEL = ['DOBLADO', 'PLANCHA', 'VAPOR']; // mismo orden que el Excel real (ENCAJADO excluido, ver nota en AREAS)
   const prendasDia = window._prendasPorModuloDia || {};
 
   const html = ORDEN_EXCEL.map(area => {
@@ -1361,7 +1373,6 @@ function renderVistaReporte() {
     { area: 'DOBLADO', titulo: '1. Doblado', individual: false },
     { area: 'PLANCHA', titulo: '2. Plancha Manual', individual: false },
     { area: 'VAPOR', titulo: '3. Vapor', individual: true },
-    { area: 'ENCAJADO', titulo: '4. Encajado', individual: true }
   ];
 
   let html = `<div style="background:#fff;border:1px solid ${STONE}22;border-radius:10px;padding:18px;display:inline-block;margin-bottom:20px">
