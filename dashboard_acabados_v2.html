@@ -148,6 +148,15 @@
   .footer{color:var(--stone);font-size:12px;text-align:center;margin-top:26px}
   .err{background:#FBE9E9;border:1px solid var(--rose);color:var(--rose);padding:12px 16px;border-radius:8px;margin-top:14px}
   .legend{font-size:11px;color:var(--stone);margin-top:6px}
+  /* 16-set-2026: aviso de horas del HO que el cálculo no está contando.
+     Nace del defecto del domingo: las horas en columna "Doble" no se sumaban
+     y diez personas quedaban en 0% sin que nada fallara en pantalla. */
+  .aviso-datos{display:flex;gap:12px;align-items:flex-start;background:#FEF3E2;
+    border-left:4px solid var(--taupe);border-radius:var(--r);padding:14px 16px;margin-bottom:16px}
+  .aviso-datos .ico{flex:0 0 auto;font-size:20px;line-height:1.2}
+  .aviso-datos b{display:block;color:#8a4f08;font-size:14px;margin-bottom:3px}
+  .aviso-datos p{color:#8a5a1c;font-size:12.5px;margin:0}
+  .aviso-datos .det{margin-top:6px;font-size:12px;color:#8a5a1c}
   details.help{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);
     padding:12px 16px;margin-top:18px;font-size:13px}
   details.help summary{cursor:pointer;font-weight:bold;color:var(--sage-dark)}
@@ -239,6 +248,7 @@
 
   <div id="content" class="hidden">
     <div id="avisoArchivo" class="hidden" style="background:#FEF3DD;border:1px solid #F59E0B;color:#8a6d2e;padding:10px 16px;border-radius:8px;margin-bottom:14px;font-size:13px"></div>
+    <div id="avisoDatos"></div>
     <div class="kpis" id="kpis"></div>
 
     <div class="grid2">
@@ -669,6 +679,7 @@ function cargarHistorico(semana, anio) {
 
 function renderHistorico(data) {
   if (!data.ok) { err('No se pudo cargar esa semana: ' + (data.error || '')); return; }
+  renderAvisoDatos(null); // el aviso es solo de la semana en vivo
   $('btnExportar').disabled = true; // en semanas archivadas no se exporta (las hojas crudas ya se limpiaron)
 
   const rows = data.rows || [];
@@ -903,6 +914,8 @@ function render(data){
 
   // ---- KPIs
   // Áreas activas = las que tienen producción esta semana (excluye ENCAJADO u otra área sin digitar).
+  renderAvisoDatos(data.horasNoContadas);
+
   const areasActivas=AREAS.filter(a=>pondArea[a].mp>0);
   let totInc=0; AREAS.forEach(a=>{totInc+=byArea[a].inc;});
   // Eficiencia general = ponderado de TODA el area de Acabados: se suman los
@@ -1143,6 +1156,26 @@ function fillTable(area){
   }).join('');
   renderPanelCambios(rows);
 }
+// Muestra el aviso solo si el backend encontró horas sin contar. Si todo
+// cuadra no ocupa espacio: la caja queda vacía.
+function renderAvisoDatos(info){
+  const cont=$('avisoDatos');
+  if(!cont) return;
+  if(!info||!info.hay||!info.dias||!info.dias.length){ cont.innerHTML=''; return; }
+  const filas=info.dias.map(d=>
+    `<div class="det">· <b style="display:inline">${d.dia}</b>: el HO tiene ${d.minutosEnHo.toLocaleString('es-PE')} min cargados y el cálculo está contando ${d.minutosContados.toLocaleString('es-PE')} — faltan ${d.sinContar.toLocaleString('es-PE')} min.</div>`
+  ).join('');
+  cont.innerHTML=`
+    <div class="aviso-datos">
+      <span class="ico">\u26A0\uFE0F</span>
+      <div>
+        <b>Hay horas del HO que no se están contando</b>
+        <p>Las personas con esas horas van a salir en 0% y sin incentivo ese día, aunque hayan trabajado. No es un error de rendimiento: es un dato que el cálculo no está tomando.</p>
+        ${filas}
+      </div>
+    </div>`;
+}
+
 function areaColor(a){return {PLANCHA:PETROLEO,VAPOR:SLATE,DOBLADO:MONETARIO,ENCAJADO:ESMERALDA}[a]||STONE;}
 
 function fillTablaPorModulo(){
