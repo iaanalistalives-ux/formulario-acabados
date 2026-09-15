@@ -1399,7 +1399,7 @@
           mostrarAviso('sistemaBatch', res.error || 'Error al guardar.', true);
         }
       })
-      .catch(() => mostrarAviso('sistemaBatch', 'No se confirmó la respuesta. Revisa SISTEMA DOB antes de reintentar.', true))
+      .catch(() => mostrarAviso('sistemaBatch', 'No llegó la confirmación. Puedes reintentar: el sistema no duplica un guardado repetido.', true))
       .finally(() => { btn.disabled = false; btn.textContent = 'Guardar todo esto en Sistema'; });
   });
 
@@ -1478,7 +1478,7 @@
           mostrarAviso(tipo, res.error || 'Error al guardar.', true);
         }
       })
-      .catch(() => mostrarAviso(tipo, 'No se confirmó la respuesta (puede tardar la primera vez). Antes de reintentar, revisa el Sheet — quizá sí se guardó y reintentar duplicaría la fila.', true))
+      .catch(() => mostrarAviso(tipo, 'No llegó la confirmación, pero puede haberse guardado igual. Puedes volver a darle a Guardar sin miedo: el sistema detecta el registro repetido y no lo duplica.', true))
       .finally(() => {
         btn.disabled = false;
         btn.textContent = textoOriginal;
@@ -1590,7 +1590,7 @@
           mostrarAvisoModal(res.error || 'Error al guardar.');
         }
       })
-      .catch(() => mostrarAvisoModal('No se confirmó la respuesta (puede tardar la primera vez). Revisa el Sheet antes de reintentar.'))
+      .catch(() => mostrarAvisoModal('No llegó la confirmación. Puedes reintentar: el sistema no duplica un guardado repetido.'))
       .finally(() => {
         btn.disabled = false;
         btn.textContent = textoOriginal;
