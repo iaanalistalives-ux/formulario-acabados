@@ -563,7 +563,7 @@
         </div>
         <div id="panelCambios" style="margin-top:12px"></div>
         <div class="legend">La celda de eficiencia se pinta verde ≥85%, ámbar 70–84%, rosa &lt;70%. El incentivo diario ya considera la curva y el básico de cada trabajador. La columna % Rechazo Audit. solo aplica a DOBLADO (viene de AUDITORIA DOB). Desde que la digitación pasó a ser por módulo (no por persona), las columnas de % Efic diario y Prendas de esta tabla pueden salir en 0 para trabajadores de módulos con 2+ integrantes — el incentivo en soles sigue siendo exacto. Para ver la producción real por pareja/módulo, usa la pestaña <b>POR MÓDULO</b>. El <b>% Efic Sem</b> del módulo usa el mismo criterio que la vista individual (promedio de las eficiencias diarias, ya topadas), por eso una pareja de dos operarias al 77% da 77% y no un número inflado. La columna <b>Prendas total</b> suma producidas + rechazadas (las rechazadas solo existen en DOBLADO, vienen de AUDITORIA DOB).</div>
-        <div class="legend" id="legend-exportar" style="margin-top:4px">"Exportar vista a Excel" descarga la tabla de la pestaña abierta arriba (TODAS, PLANCHA, VAPOR o DOBLADO): eficiencia e incentivo de cada persona por día y de la semana.</div>
+        <div class="legend" id="legend-exportar" style="margin-top:4px">"Exportar vista a Excel" descarga el resumen de la pestaña abierta arriba (TODAS, PLANCHA, VAPOR o DOBLADO) con el formato de siempre: RESUMEN por módulo, REGISTROS digitados y MENSUAL_ANUAL.</div>
       </div>
 
       <div id="vistaExcelDash" class="hidden">
@@ -921,296 +921,148 @@ $('selSemana').addEventListener('change', () => {
 });
 cargarSelectorSemanas();
 
-/* =============================================================================
-   EXPORTADOR EXCEL LIVES v1
-   Pegar tal cual en cualquier dashboard o formulario LIVES.
-   Requiere ExcelJS por CDN (SheetJS NO sirve: no escribe colores). Agregar al <head>:
-     script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"
-   (etiqueta script normal; aquí va sin los signos < > porque un cierre de script dentro
-   de un comentario corta el bloque del HTML donde se pegue este archivo)
 
-   Uso mínimo:
-     exportarExcelLIVES({
-       archivo: "Inspeccion_Resumen_Set2026.xlsx",
-       titulo : "Inspección Final — Resumen",
-       sub    : "Set 2026 · datos hasta el 9/09",
-       formula: "Eficiencia = minutos producidos ÷ minutos asistidos",
-       columnas: [
-         { campo:"inspectora", titulo:"Inspectora",  tipo:"texto",      ancho:26 },
-         { campo:"lote",       titulo:"Lote",        tipo:"entero" },
-         { campo:"efic",       titulo:"% Eficiencia",tipo:"porcentaje" },
-         { campo:"horas",      titulo:"H. asistidas",tipo:"horas" }
-       ],
-       filas: MIS_DATOS
-     });
-   ========================================================================== */
-
-var LIVES_XLS = {
-  PETROLEO:'FF0E3B36', SALVIA:'FF0F7A5A', SALVIA_OSC:'FF0B815E', SLATE:'FF4E6B78',
-  TAUPE:'FFB45309', ROSA:'FFDC2626', WARM:'FFF1F6F4', BORDE:'FFDCE5E2',
-  LOGO_B64:'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' /* pegar aquí el base64 del logo blanco 96px, sin el prefijo data: */
-};
-
-/* Formatos por tipo de dato. Regla: 2 decimales como máximo, nunca más.
-   El texto va con '@' para que Excel no convierta códigos como "07-A" en fechas. */
-var LIVES_FORMATOS = {
-  texto        : '@',
-  alfanumerico : '@',
-  entero       : '#,##0',
-  decimal      : '#,##0.00',
-  decimal3     : '#,##0.000',    /* excepción: solo si el dato pierde sentido con 2 */
-  porcentaje   : '0.00%',        /* el valor va como fracción: 0.529 -> 52.90% */
-  porcentaje0  : '0%',
-  moneda       : '"S/ "#,##0.00',
-  dolar        : '"$ "#,##0.00',
-  fraccion     : '# ?/?',
-  horas        : '#,##0.0" h"',  /* horas decimales: 22.2 h */
-  duracion     : '[h]:mm',       /* duración real, admite pasar de 24 h */
-  fecha        : 'dd/mm/yyyy',
-  fecha_hora   : 'dd/mm/yyyy hh:mm',
-  mes          : 'mmm yyyy'
-};
-
-/* Si no se declara el tipo, se deduce de los valores de la columna. */
-function livesDetectarTipo(filas, campo){
-  var vistos = 0, num = 0, ent = 0, fec = 0, frac01 = 0;
-  for(var i=0;i<filas.length;i++){
-    var v = filas[i][campo];
-    if(v===null||v===undefined||v==='') continue;
-    vistos++;
-    if(v instanceof Date){ fec++; continue; }
-    if(typeof v === 'number' && isFinite(v)){
-      num++;
-      if(Math.abs(v % 1) < 1e-9) ent++;
-      if(v>=0 && v<=1) frac01++;
-    }
-  }
-  if(!vistos) return 'texto';
-  if(fec === vistos) return 'fecha';
-  if(num !== vistos) return 'texto';
-  if(frac01 === vistos && ent !== vistos) return 'porcentaje';
-  if(ent === vistos) return 'entero';
-  return 'decimal';
+// 24-set-2026: el Excel vuelve a ser EXACTAMENTE el de siempre (el que armaba
+// el Apps Script): hojas RESUMEN, REGISTROS y MENSUAL_ANUAL, mismas columnas,
+// colores y formatos. Pdas = prendas del MÓDULO (producidas + rechazadas en
+// auditoría), por semana y por día; % Efi e Incentivo = de cada persona.
+// Los datos salen de Supabase (acabados_api 'exportar'); el archivo se arma aquí.
+const XL_PET = 'FF0E3B36', XL_SLATE = 'FF5B7C78', XL_GRIS = 'FFF1F6F4', XL_VERDE = 'FFE3F2EE';
+const xlFondo = c => ({ type: 'pattern', pattern: 'solid', fgColor: { argb: c } });
+const XL_BLANCO = { color: { argb: 'FFFFFFFF' }, bold: true };
+function xlFecha(s) { if (!s) return null; const p = String(s).split('-').map(Number); return new Date(Date.UTC(p[0], p[1] - 1, p[2])); }
+function xlTitulo(h, fila, ancho, texto, color, extra) {
+  h.mergeCells(fila, 1, fila, ancho);
+  const c = h.getCell(fila, 1);
+  c.value = texto; c.fill = xlFondo(color); c.font = Object.assign({}, XL_BLANCO, extra || {}); c.alignment = { horizontal: 'center' };
 }
-
-/* -----------------------------------------------------------------------------
-   Contexto del dashboard. El título, el período y la fórmula NO se inventan:
-   se toman de lo que ya dice la propia herramienta en pantalla. Si no hay de
-   dónde sacarlos, se omiten — una cabecera vacía es honesta; una inventada no.
-   Orden de búsqueda, primero el que exista:
-     titulo -> cfg.titulo | CFG.titulo | #hTitulo | document.title
-     sub    -> cfg.sub    | #hEstado (estado de filtros actual)
-     formula-> cfg.formula| CFG.formula   (nunca se deduce ni se redacta)
-   -------------------------------------------------------------------------- */
-function livesTexto(sel){
-  var el = document.querySelector(sel);
-  if(!el) return '';
-  return (el.innerText || el.textContent || '').replace(/\s+/g,' ').trim();
+function xlEncabezado(h, fila, colIni, textos, color) {
+  textos.forEach((v, i) => { const c = h.getCell(fila, colIni + i); c.value = v; c.fill = xlFondo(color); c.font = XL_BLANCO; c.alignment = { horizontal: 'center' }; });
 }
-function livesContexto(cfg){
-  var G = (typeof CFG !== 'undefined') ? CFG : {};
-  var titulo = cfg.titulo || G.titulo || livesTexto('#hTitulo') ||
-               (document.title || '').replace(/\s*·\s*LIVES\s*$/,'').trim();
-  var sub    = cfg.sub    || livesTexto('#hEstado') || G.subtitulo || '';
-  var formula= cfg.formula|| G.formula || '';
-  /* Si se exporta un panel concreto, su propio título manda sobre el del tablero. */
-  if(cfg.panel){
-    var t = livesTexto(cfg.panel + ' .pt');
-    if(t) titulo = titulo ? (titulo + ' — ' + t) : t;
-    var h = livesTexto(cfg.panel + ' .ph');
-    if(h && !formula) formula = h;
-  }
-  return { titulo: titulo, sub: sub, formula: formula,
-           origen: cfg.origen || G.titulo || livesTexto('#hTitulo') || '' };
-}
-/* Nombre de archivo: del título real, sin tildes ni espacios. Tampoco se inventa. */
-function livesNombreArchivo(titulo, sub){
-  var base = (titulo + (sub ? '_' + sub : ''))
-    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
-    .replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,90);
-  return (base || 'Reporte_LIVES') + '.xlsx';
-}
-
-async function exportarExcelLIVES(cfg){
-  if(typeof ExcelJS === 'undefined')
-    throw new Error('Falta ExcelJS. SheetJS no escribe colores; hay que cargar ExcelJS por CDN.');
-
-  var ctx   = livesContexto(cfg);
-  var cols  = cfg.columnas || [];
-  var filas = cfg.filas || [];
-  var n     = cols.length;
-  if(!n) throw new Error('No hay columnas que exportar.');
-
-  var wb = new ExcelJS.Workbook();
-  wb.creator = 'LIVES';
-  wb.created = new Date();
-  var hoja = wb.addWorksheet(cfg.hoja || 'Resumen', {
-    views:[{ state:'frozen', xSplit: cfg.congelarCols||0, ySplit: 0 }],
-    pageSetup:{ orientation:'landscape', fitToPage:true, fitToWidth:1, fitToHeight:0 }
-  });
-
-  /* ---------- fila 1: banda de marca con logo y título ---------- */
-  hoja.mergeCells(1,1,1,n);
-  hoja.getRow(1).height = 34;
-  var c1 = hoja.getCell(1,1);
-  c1.value = ctx.titulo;
-  c1.fill  = { type:'pattern', pattern:'solid', fgColor:{argb:LIVES_XLS.PETROLEO} };
-  c1.font  = { name:'Calibri', size:13, bold:true, color:{argb:'FFFFFFFF'} };
-  /* Alineado a la izquierda, no centrado: en tablas anchas (30, 40, 50 columnas) un
-     título centrado queda a mitad del ancho y no se ve al abrir el archivo. El indent
-     lo despega del logo. */
-  c1.alignment = { vertical:'middle', horizontal:'left', indent:18 };
-
-  if(LIVES_XLS.LOGO_B64){
-    var img = wb.addImage({ base64: LIVES_XLS.LOGO_B64, extension:'png' });
-    /* 120 x 31 respeta la proporción real del logo (3.85:1). No cambiar solo uno de los dos. */
-    hoja.addImage(img, { tl:{ col:0.12, row:0.22 }, ext:{ width:120, height:31 } });
-  }
-
-  /* ---------- fila 2: subtítulo / período ---------- */
-  var fila = 2;
-  if(ctx.sub){
-    hoja.mergeCells(fila,1,fila,n);
-    var c2 = hoja.getCell(fila,1);
-    c2.value = ctx.sub;
-    c2.fill  = { type:'pattern', pattern:'solid', fgColor:{argb:LIVES_XLS.SLATE} };
-    c2.font  = { name:'Calibri', size:10, bold:true, color:{argb:'FFFFFFFF'} };
-    c2.alignment = { vertical:'middle', horizontal:'left', indent:18 };
-    hoja.getRow(fila).height = 18;
-    fila++;
-  }
-
-  /* ---------- fila 3: cómo se calcula ---------- */
-  if(ctx.formula){
-    hoja.mergeCells(fila,1,fila,n);
-    var c3 = hoja.getCell(fila,1);
-    c3.value = ctx.formula;
-    c3.font  = { name:'Calibri', size:9, italic:true, color:{argb:'FF5F726C'} };
-    c3.alignment = { vertical:'middle', horizontal:'left', indent:1 };
-    hoja.getRow(fila).height = 16;
-    fila++;
-  }
-
-  /* ---------- encabezados ---------- */
-  var filaEnc = fila;
-  cols.forEach(function(c,j){
-    var cel = hoja.getCell(filaEnc, j+1);
-    cel.value = c.titulo || c.campo;
-    cel.fill  = { type:'pattern', pattern:'solid', fgColor:{argb: c.color || LIVES_XLS.SALVIA_OSC} };
-    cel.font  = { name:'Calibri', size:11, bold:true, color:{argb:'FFFFFFFF'} };
-    cel.alignment = { vertical:'middle', horizontal:'center', wrapText:true };
-    cel.border = { bottom:{ style:'thin', color:{argb:LIVES_XLS.BORDE} } };
-  });
-  hoja.getRow(filaEnc).height = 22;
-  hoja.views = [{ state:'frozen', xSplit: cfg.congelarCols||0, ySplit: filaEnc }];
-
-  /* ---------- tipos: declarados o deducidos ---------- */
-  var tipos = cols.map(function(c){
-    return c.tipo || livesDetectarTipo(filas, c.campo);
-  });
-
-  /* ---------- datos ---------- */
-  filas.forEach(function(f, i){
-    var r = filaEnc + 1 + i;
-    var par = (i % 2 === 1);
-    cols.forEach(function(c, j){
-      var cel = hoja.getCell(r, j+1);
-      var v = f[c.campo];
-      /* Sin dato = celda vacía. Un cero es un dato; un vacío es la ausencia de dato. */
-      cel.value = (v===null||v===undefined||v==='') ? null : v;
-      /* 'formato' permite un formato de Excel propio para una columna concreta.
-         Es la única manera aprobada de pasarse de 2 decimales, y debe justificarse. */
-      cel.numFmt = c.formato || LIVES_FORMATOS[tipos[j]] || '@';
-      cel.font = { name:'Calibri', size:11, color:{argb:'FF333333'} };
-      cel.alignment = {
-        vertical:'middle',
-        horizontal: (tipos[j]==='texto'||tipos[j]==='alfanumerico') ? 'left' : 'right'
-      };
-      if(par) cel.fill = { type:'pattern', pattern:'solid', fgColor:{argb:LIVES_XLS.WARM} };
-      cel.border = { bottom:{ style:'hair', color:{argb:LIVES_XLS.BORDE} } };
+function xlAutoAncho(h, maxCols) {
+  for (let c = 1; c <= maxCols; c++) {
+    let m = 6;
+    h.getColumn(c).eachCell({ includeEmpty: false }, cell => {
+      if (cell.isMerged && cell.master !== cell) return;
+      const v = cell.value; if (v == null) return;
+      let t = v instanceof Date ? '00/00/0000' : (typeof v === 'number' ? (Math.round(v * 100) / 100).toString() : String(v));
+      if (cell.isMerged) return;
+      m = Math.max(m, t.length + 2);
     });
-  });
+    h.getColumn(c).width = Math.min(m, 40);
+  }
+}
+async function exportarExcelAcabados(d) {
+  const wb = new ExcelJS.Workbook();
+  const DIAS = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
+  const sufijo = d.vista !== 'TODAS' ? ' — ' + d.vista : '';
 
-  /* ---------- pie de trazabilidad ---------- */
-  var filaPie = filaEnc + filas.length + 2;
-  hoja.mergeCells(filaPie,1,filaPie,n);
-  var cp = hoja.getCell(filaPie,1);
-  cp.value = 'Generado el ' + new Date().toLocaleDateString('es-PE') +
-             (ctx.origen ? ' desde ' + ctx.origen : '') +
-             ' · ' + filas.length + ' fila(s)';
-  cp.font = { name:'Calibri', size:9, italic:true, color:{argb:'FF5F726C'} };
-
-  /* ---------- anchos: declarados o calculados por contenido ---------- */
-  cols.forEach(function(c,j){
-    if(c.ancho){ hoja.getColumn(j+1).width = c.ancho; return; }
-    var max = String(c.titulo||c.campo).length;
-    for(var i=0;i<filas.length;i++){
-      var v = filas[i][c.campo];
-      if(v===null||v===undefined) continue;
-      var L = (v instanceof Date) ? 10 :
-              (typeof v==='number') ? String(Math.round(v)).length + 4 : String(v).length;
-      if(L>max) max = L;
+  // ---------- RESUMEN ----------
+  const h = wb.addWorksheet('RESUMEN');
+  let f = 1;
+  xlTitulo(h, f, 6, 'EFICIENCIA ÁREA ACABADOS — SEMANA ' + d.semana + sufijo, XL_PET, { size: 13 });
+  f += 2;
+  d.bloques.forEach(b => {
+    const base = b.area === 'DOBLADO' ? ['MÓDULO', 'OPERARIO', '% EFI SEM', 'Pdas Prod', 'INCENT. S/', '% RECHAZO'] : ['MÓDULO', 'OPERARIO', '% EFI SEM', 'Pdas Prod', 'INCENT. S/'];
+    const cols = base.concat(...DIAS.map(x => ['Pdas ' + x, '% Efi ' + x, 'Inc ' + x]));
+    xlTitulo(h, f, cols.length, b.area, XL_PET); f++;
+    xlEncabezado(h, f, 1, cols, XL_SLATE); f++;
+    const ini = f;
+    const grupos = b.grupos.slice().sort((a, c) => a.modulo === '(sin módulo)' ? 1 : c.modulo === '(sin módulo)' ? -1 : a.modulo.localeCompare(c.modulo, 'es', { numeric: true }));
+    let alt = false;
+    grupos.forEach(g => {
+      const iniG = f;
+      g.filas.forEach(p => {
+        const fila = [p.operario, p.efsem, g.pdasSem, p.inc].concat(b.area === 'DOBLADO' ? [g.rechazo] : []);
+        for (let i = 0; i < 7; i++) fila.push((g.pdasDia || [])[i] || 0, (p.efic || [])[i] || 0, (p.incDia || [])[i] || 0);
+        fila.forEach((v, i) => { const c = h.getCell(f, i + 2); c.value = v; if (alt) c.fill = xlFondo(XL_GRIS); });
+        f++;
+      });
+      if (g.filas.length > 1) h.mergeCells(iniG, 1, f - 1, 1);
+      const m = h.getCell(iniG, 1);
+      m.value = g.modulo; m.font = { bold: true }; m.alignment = { vertical: 'middle', horizontal: 'center' };
+      if (alt) m.fill = xlFondo(XL_GRIS);
+      alt = !alt;
+    });
+    if (f > ini) {
+      const cI = b.area === 'DOBLADO' ? 7 : 6, pct = [3], dec = [5];
+      if (b.area === 'DOBLADO') pct.push(6);
+      for (let k = 0; k < 7; k++) { pct.push(cI + k * 3 + 1); dec.push(cI + k * 3 + 2); }
+      for (let r = ini; r < f; r++) { pct.forEach(c => h.getCell(r, c).numFmt = '0%'); dec.forEach(c => h.getCell(r, c).numFmt = '0.00'); }
     }
-    hoja.getColumn(j+1).width = Math.min(Math.max(max + 3, 9), 42);
+    f++;
   });
+  xlAutoAncho(h, 27);
 
-  hoja.autoFilter = {
-    from:{ row:filaEnc, column:1 },
-    to:{ row:filaEnc + filas.length, column:n }
-  };
+  // ---------- REGISTROS ----------
+  const r = wb.addWorksheet('REGISTROS');
+  f = 1;
+  xlTitulo(r, f, 6, 'REGISTROS DIGITADOS — SEMANA ' + d.semana + sufijo, XL_PET, { size: 13 });
+  f += 2;
+  function seccion(titulo, enc, datos, colFecha) {
+    if (!datos.length) return;
+    xlTitulo(r, f, enc.length, titulo, XL_SLATE); f++;
+    xlEncabezado(r, f, 1, enc, XL_PET); f++;
+    datos.forEach((fila, i) => {
+      fila.forEach((v, k) => {
+        const c = r.getCell(f, k + 1);
+        c.value = k === colFecha ? xlFecha(v) : v;
+        if (k === colFecha) c.numFmt = 'dd/mm/yyyy';
+        if (i % 2 === 0) c.fill = xlFondo(XL_GRIS);
+      });
+      f++;
+    });
+    f += 2;
+  }
+  seccion('PRODUCCIÓN POR MÓDULO', ['Fecha', 'Área', 'Módulo', 'Estilo/Subcat.', 'Cantidad', 'STD', 'Min Prod', 'Improd (min)', 'Apoyo (min)'], d.registros.produccion || [], 0);
+  seccion('SISTEMA DOB (incentivos sistema)', ['Fecha', 'Módulo', 'Estilo', 'Cantidad', 'STD', 'Min Prod'], d.registros.sistema || [], 0);
+  seccion('RECHAZO DE AUDITORÍA', ['Fecha', 'Módulo', 'Cliente', 'Prendas Rechazadas', 'STD', 'Min Rework', 'Min Improd', 'Apoyo Módulo'], d.registros.auditoria || [], 0);
+  xlAutoAncho(r, 9);
 
-  /* ---------- descarga ---------- */
-  var buf = await wb.xlsx.writeBuffer();
-  var blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = cfg.archivo || livesNombreArchivo(ctx.titulo, ctx.sub);
-  document.body.appendChild(a); a.click();
-  setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  // ---------- MENSUAL_ANUAL ----------
+  const M = d.mensual;
+  if (M && M.ok && M.anios && M.anios.length) {
+    const h3 = wb.addWorksheet('MENSUAL_ANUAL');
+    const CORTO = { DOBLADO: 'DOB', PLANCHA: 'PL', VAPOR: 'VAP', ENCAJADO: 'ENC', ACABADOS: 'ACABADOS' };
+    const ancho = M.areas.length + 1;
+    xlTitulo(h3, 1, M.anios.length * (ancho + 1), 'EFICIENCIA ACABADOS — MENSUAL / ANUAL', XL_PET, { size: 13 });
+    M.anios.forEach((anio, idx) => {
+      const c0 = 1 + idx * (ancho + 1);
+      h3.mergeCells(3, c0, 3, c0 + ancho - 1);
+      const t = h3.getCell(3, c0); t.value = anio; t.fill = xlFondo(XL_SLATE); t.font = XL_BLANCO; t.alignment = { horizontal: 'center' };
+      xlEncabezado(h3, 4, c0, [''].concat(M.areas.map(a => CORTO[a] || a)), XL_PET);
+      let fila = 5;
+      M.meses.forEach(mes => {
+        const dd = M.datos[String(anio)][mes];
+        h3.getCell(fila, c0).value = mes;
+        M.areas.forEach((a, k) => { const c = h3.getCell(fila, c0 + 1 + k); c.value = dd[a] == null ? null : Number(dd[a]); c.numFmt = '0%'; });
+        fila++;
+      });
+      const prom = M.datos[String(anio)].PROMEDIO;
+      const borde = { top: { style: 'medium', color: { argb: XL_PET } } };
+      const cA = h3.getCell(fila, c0); cA.value = 'AÑO'; cA.fill = xlFondo(XL_VERDE); cA.font = { bold: true }; cA.border = borde;
+      M.areas.forEach((a, k) => { const c = h3.getCell(fila, c0 + 1 + k); c.value = prom[a] == null ? null : Number(prom[a]); c.numFmt = '0%'; c.fill = xlFondo(XL_VERDE); c.font = { bold: true }; c.border = borde; });
+    });
+    xlAutoAncho(h3, M.anios.length * (ancho + 1));
+  }
+
+  const buf = await wb.xlsx.writeBuffer();
+  const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = 'Resumen_Acabados_Semana' + d.semana + '_' + d.vista + '.xlsx';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-
-// 24-set-2026: el Excel se arma aquí, en el navegador (antes lo armaba el
-// Apps Script). Exporta la tabla de la pestaña abierta.
 $('btnExportar').addEventListener('click', async () => {
   const vista = window._tabActiva === 'POR MÓDULO' ? 'TODAS' : (window._tabActiva || 'TODAS');
-  const rows = (window._rows || []).filter(r => vista === 'TODAS' || r.area === vista);
-  if (!rows.length) { alert('No hay datos para exportar en esta vista.'); return; }
   const btn = $('btnExportar');
   btn.disabled = true; btn.textContent = 'Generando...';
   try {
-    const DIAS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-    const filas = rows.map(r => {
-      const o = { cod: r.cod, oper: r.oper, area: r.area, grupo: r.grupo, efsem: r.efsem, pdas: r.pdas,
-                  mprod: r.mprod, masist: r.masist, improd: r.improd, inc: r.inc };
-      DIAS.forEach((_, d) => { o['e' + d] = (r.daily || [])[d] || 0; o['i' + d] = (r.incDaily || [])[d] || 0; });
-      return o;
-    });
-    const columnas = [
-      { campo: 'cod', titulo: 'Código', tipo: 'alfanumerico' },
-      { campo: 'oper', titulo: 'Trabajador', tipo: 'texto', ancho: 26 },
-      { campo: 'area', titulo: 'Área', tipo: 'texto' },
-      { campo: 'grupo', titulo: 'Módulo', tipo: 'alfanumerico' }
-    ].concat(DIAS.map((d, i) => ({ campo: 'e' + i, titulo: '% Efic ' + d, tipo: 'porcentaje' })))
-     .concat([
-      { campo: 'efsem', titulo: '% Efic semana', tipo: 'porcentaje' },
-      { campo: 'pdas', titulo: 'Prendas del módulo', tipo: 'entero' },
-      { campo: 'mprod', titulo: 'Min producidos', tipo: 'decimal' },
-      { campo: 'masist', titulo: 'Min asistidos', tipo: 'decimal' },
-      { campo: 'improd', titulo: 'Min improductivos', tipo: 'decimal' }
-    ]).concat(DIAS.map((d, i) => ({ campo: 'i' + i, titulo: 'Incentivo ' + d, tipo: 'moneda' })))
-     .concat([{ campo: 'inc', titulo: 'Incentivo semana', tipo: 'moneda' }]);
-    const sub = String($('sub').innerText || '').split('\n')[0].trim();
-    await exportarExcelLIVES({
-      archivo: 'Acabados_' + vista.replace(/[^A-Za-z]/g, '') + '_' + (sub.replace(/[^0-9A-Za-z]+/g, '') || 'semana') + '.xlsx',
-      titulo: 'Dashboard Acabados — ' + vista,
-      sub: sub,
-      formula: 'Eficiencia = minutos producidos ÷ (minutos asistidos + apoyo − improductivos), sumando minutos (ponderada), nunca promediando porcentajes.',
-      origen: 'Dashboard Acabados',
-      congelarCols: 2,
-      columnas: columnas,
-      filas: filas
-    });
+    const r = await apiFetch(URL_APPS_SCRIPT, { method: 'POST', body: JSON.stringify({ tipo: 'exportar', vista: vista }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'la base de datos no devolvió los datos');
+    await exportarExcelAcabados(d);
   } catch (e) {
     alert('No se pudo generar el Excel: ' + e.message);
   } finally {
