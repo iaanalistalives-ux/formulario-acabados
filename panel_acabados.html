@@ -501,8 +501,11 @@ input:focus,select:focus,textarea:focus{outline:2px solid rgba(15,122,90,.25);bo
       <p class="ayuda" id="pInfo"></p>
       <div class="scroll" style="max-height:560px"><table class="tabla" id="pTabla" style="font-size:13px"></table></div>
     </div>
-    <div class="card"><h2>Rechazos de auditoría (Doblado)</h2>
-      <p class="ayuda">Minutos de rework = prendas rechazadas × tiempo del cliente. Suman a los minutos producidos del módulo.</p>
+    <div class="card"><h2>Auditoría de Doblado (antes AUDITORIA DOB)</h2>
+      <p class="ayuda">Qué módulos de Doblado tuvieron prendas de auditoría (rechazadas) en la semana. <b>% rechazo</b> = rechazadas ÷ (producidas + rechazadas) del módulo.
+        Minutos de rework = prendas rechazadas × tiempo del cliente: suman a los minutos producidos del módulo.</p>
+      <table class="tabla" id="pRechMod" style="margin-bottom:12px"></table>
+      <p class="ayuda"><b>Detalle por registro</b></p>
       <div class="scroll" style="max-height:360px"><table class="tabla" id="pRech" style="font-size:13px"></table></div></div>
   </section>
 
@@ -755,6 +758,15 @@ function pintarProd() {
       <td class="n">${fmt(r.cantidad, 0)}</td><td class="n">${r.stdManual != null ? fmt(r.stdManual, 2) : ''}</td><td class="n"><b>${fmt(r.std, 2)}</b></td>
       <td${/^SIN STD/.test(r.origen) ? ' class="rojo"' : ''}>${esc(r.origen)}</td><td class="n">${fmt(r.minProd, 1)}</td><td class="n">${fmt(r.improd, 0)}</td><td class="n">${fmt(r.apoyo, 0)}</td><td>${esc(r.por || 'Sheet')}</td></tr>`).join('');
   const rech = PRD.rechazos.filter(r => !q || norm([r.modulo, r.cliente, ddmmF(r.fecha)].join(' ')).includes(q));
+  const pm = {};
+  PRD.produccion.filter(r => r.area === 'DOBLADO').forEach(r => { (pm[r.modulo] = pm[r.modulo] || { prod: 0, rech: 0, min: 0, reg: 0 }).prod += Number(r.cantidad) || 0; });
+  PRD.rechazos.forEach(r => { const o = (pm[r.modulo] = pm[r.modulo] || { prod: 0, rech: 0, min: 0, reg: 0 }); o.rech += Number(r.cantidad) || 0; o.min += Number(r.minProd) || 0; o.reg++; });
+  const mods = Object.keys(pm).sort();
+  let tp = 0, tr = 0, tmin = 0;
+  $('pRechMod').innerHTML = '<tr><th>Módulo</th><th class="n">Producidas</th><th class="n">Rechazadas (auditoría)</th><th class="n">% rechazo</th><th class="n">Registros</th><th class="n">Min rework</th></tr>' +
+    mods.map(m => { const o = pm[m]; tp += o.prod; tr += o.rech; tmin += o.min;
+      return `<tr><td>${esc(m)}</td><td class="n">${fmt(o.prod, 0)}</td><td class="n">${fmt(o.rech, 0)}</td><td class="n">${o.prod + o.rech ? (o.rech / (o.prod + o.rech) * 100).toFixed(1) + ' %' : ''}</td><td class="n">${o.reg}</td><td class="n">${fmt(o.min, 1)}</td></tr>`; }).join('') +
+    `<tr class="tot"><td>Doblado</td><td class="n">${fmt(tp, 0)}</td><td class="n">${fmt(tr, 0)}</td><td class="n">${tp + tr ? (tr / (tp + tr) * 100).toFixed(1) + ' %' : ''}</td><td class="n">${PRD.rechazos.length}</td><td class="n">${fmt(tmin, 1)}</td></tr>`;
   $('pRech').innerHTML = '<tr><th>Fecha</th><th>Módulo</th><th>Cliente</th><th class="n">Rechazadas</th><th class="n">Tiempo cliente</th><th class="n">Min rework</th><th class="n">Improd</th><th class="n">Apoyo</th><th>Registró</th></tr>' +
     rech.map(r => `<tr${!r.std ? ' class="malo"' : ''}><td>${ddmmF(r.fecha)}</td><td>${esc(r.modulo)}</td><td>${esc(r.cliente || '')}</td><td class="n">${fmt(r.cantidad, 0)}</td>
       <td class="n">${fmt(r.std, 2)}</td><td class="n">${fmt(r.minProd, 1)}</td><td class="n">${fmt(r.improd, 0)}</td><td class="n">${fmt(r.apoyo, 0)}</td><td>${esc(r.por || 'Sheet')}</td></tr>`).join('');
