@@ -309,6 +309,10 @@ input:focus,select:focus,textarea:focus{outline:2px solid rgba(15,122,90,.25);bo
 .tabla th{background:var(--warm-light);color:var(--petrol);text-align:left;padding:8px;font-size:12.5px;position:sticky;top:0}
 .tabla td{border-bottom:1px solid var(--warm);padding:7px 8px}
 .tabla td.n{text-align:right}
+.tabla th.c,.tabla td.c{text-align:center}
+.tabla td.dia0{border-left:2px solid var(--warm)}
+.tabla tr.fuera td{color:#9AA5A1}
+.tabla tr.tot td{font-weight:800;background:var(--warm-light)}
 .scroll{max-height:460px;overflow:auto;border:1px solid var(--warm);border-radius:9px}
 .pill{display:inline-block;border-radius:20px;padding:1px 9px;font-size:12px;font-weight:700}
 .pill.si{background:#E8F6F0;color:var(--sage)}.pill.no{background:#F3F4F4;color:var(--stone)}
@@ -354,6 +358,17 @@ input:focus,select:focus,textarea:focus{outline:2px solid rgba(15,122,90,.25);bo
         <div class="scroll"><table class="tabla" id="hTabla"></table></div>
         <div class="fila-botones" style="margin-top:12px"><button class="btn" id="hGuardar" disabled>Guardar horas</button></div>
       </div>
+    </div>
+    <div class="card">
+      <h2>Ver las horas cargadas (HO completo)</h2>
+      <p class="ayuda">La tabla entera de la semana, como la pestaña HO del Sheet: horas Normales, Simples y Dobles de cada día.
+        En gris, quienes están en el HO pero no en Trabajadores de Acabados (sus horas no cuentan en ningún módulo). En rojo, días de más de 16 horas.</p>
+      <div class="grid">
+        <div><label for="vSemana">Semana</label><select id="vSemana"></select></div>
+        <div><label for="vBuscar">Buscar</label><input id="vBuscar" placeholder="Código, nombre o línea"></div>
+      </div>
+      <p class="ayuda" id="vInfo"></p>
+      <div class="scroll" style="max-height:560px"><table class="tabla" id="vTabla" style="font-size:13px"></table></div>
     </div>
     <div class="card"><h2>Semanas</h2><p class="ayuda">Qué semanas tienen horas cargadas. Una semana no se puede cerrar sin sus horas.</p>
       <div class="scroll"><table class="tabla" id="tSemanas"></table></div></div>
@@ -414,6 +429,28 @@ input:focus,select:focus,textarea:focus{outline:2px solid rgba(15,122,90,.25);bo
       <div class="fila-botones" style="margin-top:12px"><button class="btn" id="eGuardar">Guardar estilo</button><button class="btn sec" id="eNuevo">Limpiar</button></div>
       <div class="msg" id="eMsg"></div>
     </div>
+    <div class="card">
+      <h2>Tiempo por cliente</h2>
+      <p class="ayuda">Lo usa Doblado cuando se digita un cliente en vez de un estilo, y los rechazos de auditoría (minutos de rework = prendas rechazadas × este tiempo). Es la columna T. TOTAL de la tabla de clientes del Sheet.</p>
+      <div class="grid">
+        <div><label for="cCliente">Cliente</label><input id="cCliente" placeholder="THY"></div>
+        <div><label for="cStd">T. Total por prenda (min)</label><input id="cStd" type="number" step="0.01" min="0"></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn" id="cGuardar">Guardar cliente</button></div>
+      </div>
+      <div class="msg" id="cMsg"></div>
+      <div class="scroll" style="max-height:260px"><table class="tabla" id="cTabla"></table></div>
+    </div>
+    <div class="card">
+      <h2>Categorías de Plancha</h2>
+      <p class="ayuda">Minutos por prenda de cada categoría. Si un estilo necesita más tiempo que su categoría, se pone "STD manual" en ese registro del formulario.</p>
+      <div class="grid">
+        <div><label for="kCat">Categoría</label><select id="kCat"><option>R</option><option>A</option><option>B</option><option>C</option></select></div>
+        <div><label for="kMin">Minutos por prenda</label><input id="kMin" type="number" step="0.01" min="0"></div>
+        <div style="display:flex;align-items:flex-end"><button class="btn" id="kGuardar">Guardar categoría</button></div>
+      </div>
+      <div class="msg" id="kMsg"></div>
+      <table class="tabla" id="kTabla"></table>
+    </div>
     <div class="card"><h2>Buscar estilo</h2>
       <input id="eBuscar" placeholder="Escribe el estilo o el cliente" style="margin-bottom:10px">
       <div class="scroll"><table class="tabla" id="eTabla"></table></div>
@@ -459,7 +496,7 @@ function cargar() {
   return api('panelDatos').then(d => {
     if (!d.ok) { msg('msgGeneral', 'err', esc(d.error || 'No se pudieron cargar los datos.')); return; }
     limpiarMsg('msgGeneral'); DATOS = d;
-    pintarSemanas(); pintarTrab(); pintarMod(); pintarEstilos();
+    pintarSemanas(); pintarTrab(); pintarMod(); pintarEstilos(); pintarClientes(); pintarSelectorVer();
   });
 }
 function lunesDe(f) { const d = new Date(f + 'T00:00:00'); const dia = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dia); return d; }
@@ -484,8 +521,8 @@ const num = v => { if (v == null || v === '') return 0; if (typeof v === 'number
 const norm = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
 function leerFilas(matriz) {
   // La primera columna de horas es la que dice LUNES en el encabezado; si no hay encabezado, 4 columnas después del código.
-  let colLunes = -1;
-  for (const f of matriz.slice(0, 15)) { const i = (f || []).findIndex(c => norm(c) === 'LUNES'); if (i >= 0) { colLunes = i; break; } }
+  let colLunes = -1, colLinea = -1;
+  for (const f of matriz.slice(0, 15)) { const i = (f || []).findIndex(c => norm(c) === 'LUNES'); if (i >= 0) { colLunes = i; colLinea = (f || []).findIndex(c => norm(c) === 'LINEA'); break; } }
   const salida = [], vistos = {};
   for (const f of matriz) {
     const i = (f || []).findIndex(c => /^O-[A-Z0-9]+$/.test(norm(c)));
@@ -493,8 +530,9 @@ function leerFilas(matriz) {
     const cod = norm(f[i]), ini = colLunes >= 0 ? colLunes : i + 4;
     const horas = []; for (let k = 0; k < 21; k++) horas.push(num(f[ini + k]));
     const nombre = String(f[i + 1] || '').trim();
+    const linea = String(f[colLinea >= 0 ? colLinea : i + 3] || '').trim();
     if (vistos[cod]) { vistos[cod].h = vistos[cod].h.map((x, k) => x + horas[k]); continue; }
-    vistos[cod] = { cod, nombre, h: horas }; salida.push(vistos[cod]);
+    vistos[cod] = { cod, nombre, linea, h: horas }; salida.push(vistos[cod]);
   }
   return salida;
 }
@@ -528,7 +566,7 @@ $('hRevisar').addEventListener('click', () => {
   if (!HORAS.length) { msg('hMsg', 'err', 'No encontré ninguna fila con código de trabajador (O-…). Revisa el archivo o lo pegado.'); return; }
   mostrarHoras();
   const btn = $('hRevisar'); btn.disabled = true; btn.textContent = 'Revisando…';
-  api('horasRevisar', { lunes: $('hSemana').value, filas: HORAS.map(r => [r.cod].concat(r.h)) }).then(res => {
+  api('horasRevisar', { lunes: $('hSemana').value, filas: HORAS.map(r => [r.cod].concat(r.h)), nombres: nombresHO() }).then(res => {
     let html = '';
     if (res.errores && res.errores.length) html += '<b>No se puede guardar:</b><ul>' + res.errores.map(e => '<li>' + esc(e) + '</li>').join('') + '</ul>';
     if (res.avisos && res.avisos.length) html += '<b>Revisa antes de guardar (' + res.avisos.length + '):</b><ul>' + res.avisos.map(e => '<li>' + esc(e) + '</li>').join('') + '</ul>';
@@ -542,13 +580,59 @@ $('hRevisar').addEventListener('click', () => {
 });
 $('hGuardar').addEventListener('click', () => {
   const btn = $('hGuardar'); btn.disabled = true; btn.textContent = 'Guardando…';
-  api('horasGuardar', { lunes: $('hSemana').value, filas: HORAS.map(r => [r.cod].concat(r.h)) }).then(res => {
-    if (res.ok) { msg('hMsg', 'ok', '✅ ' + esc(res.mensaje)); HORAS = []; $('hVista').classList.add('oculto'); $('hPegar').value = ''; $('hArchivo').value = ''; $('hLeidas').textContent = ''; cargar(); }
+  api('horasGuardar', { lunes: $('hSemana').value, filas: HORAS.map(r => [r.cod].concat(r.h)), nombres: nombresHO() }).then(res => {
+    if (res.ok) { msg('hMsg', 'ok', '✅ ' + esc(res.mensaje)); $('vSemana').dataset.ir = $('hSemana').value; HORAS = []; $('hVista').classList.add('oculto'); $('hPegar').value = ''; $('hArchivo').value = ''; $('hLeidas').textContent = ''; cargar(); }
     else { msg('hMsg', 'err', esc(res.error || 'No se pudo guardar.')); btn.disabled = false; }
   }).finally(() => { btn.textContent = 'Guardar horas'; });
 });
 $('hLimpiar').addEventListener('click', () => { HORAS = []; $('hPegar').value = ''; $('hArchivo').value = ''; $('hLeidas').textContent = ''; $('hVista').classList.add('oculto'); limpiarMsg('hMsg'); });
 $('hSemana').addEventListener('change', () => { $('hGuardar').disabled = true; limpiarMsg('hMsg'); });
+
+function nombresHO() { const o = {}; HORAS.forEach(r => o[r.cod] = [r.nombre, r.linea]); return o; }
+
+// ---------- ver el HO completo ----------
+let VER = null;
+function pintarSelectorVer() {
+  const sel = $('vSemana'), previo = sel.dataset.ir || sel.value || DATOS.semanaActiva;
+  sel.dataset.ir = '';
+  sel.innerHTML = (DATOS.semanas || []).map(s => `<option value="${s.lunes}">Semana ${s.numero || ''} · lunes ${ddmm(s.lunes)} · ${s.estado}${s.horas ? '' : ' · sin horas'}</option>`).join('');
+  if ([...sel.options].some(o => o.value === previo)) sel.value = previo;
+  verHO();
+}
+function verHO() {
+  const l = $('vSemana').value; if (!l) return;
+  $('vInfo').textContent = 'Cargando…';
+  api('horasVer', { lunes: l }).then(r => {
+    if (!r.ok) { $('vInfo').textContent = r.error || 'No se pudo cargar.'; VER = null; pintarVer(); return; }
+    VER = r;
+    $('vInfo').textContent = r.filas.length ? `${r.filas.length} personas · cargadas el ${new Date(r.cargadoEn).toLocaleString('es-PE')}${r.cargadoPor ? ' por ' + r.cargadoPor : ''}` : 'Esta semana todavía no tiene horas.';
+    pintarVer();
+  });
+}
+function pintarVer() {
+  const t = $('vTabla');
+  if (!VER || !VER.filas.length) { t.innerHTML = ''; return; }
+  const q = norm($('vBuscar').value);
+  const filas = VER.filas.filter(f => !q || norm([f.codigo, f.nombre, f.linea].join(' ')).includes(q));
+  const DN = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
+  const tot = Array(21).fill(0); let totG = 0;
+  const cel = v => v ? fmt(v, 2) : '';
+  let h = '<tr><th rowspan="2">Código</th><th rowspan="2">Trabajador</th><th rowspan="2">Línea</th>' + DN.map(d => `<th colspan="3" class="c">${d}</th>`).join('') + '<th rowspan="2" class="n">Total h</th></tr>' +
+          '<tr>' + DN.map(() => '<th class="c">N</th><th class="c">S</th><th class="c">D</th>').join('') + '</tr>';
+  h += filas.map(f => {
+    let fila = `<tr${f.enTrabajadores ? '' : ' class="fuera" title="Está en el HO pero no en Trabajadores de Acabados"'}><td>${esc(f.codigo)}</td><td>${esc(f.nombre || '')}</td><td>${esc(f.linea || '')}</td>`;
+    (f.dias || []).forEach((d, i) => {
+      const suma = (d[0] || 0) + (d[1] || 0) + (d[2] || 0), alerta = suma > 16 ? ' style="color:var(--rose);font-weight:800"' : '';
+      d.forEach((v, k) => { tot[i * 3 + k] += Number(v) || 0; fila += `<td class="n${k === 0 ? ' dia0' : ''}"${alerta}>${cel(v)}</td>`; });
+    });
+    totG += Number(f.total) || 0;
+    return fila + `<td class="n"><b>${fmt(f.total, 2)}</b></td></tr>`;
+  }).join('');
+  h += '<tr class="tot"><td colspan="3">Total (' + filas.length + ' personas)</td>' + tot.map((v, k) => `<td class="n${k % 3 === 0 ? ' dia0' : ''}">${cel(v)}</td>`).join('') + `<td class="n">${fmt(totG, 2)}</td></tr>`;
+  t.innerHTML = h;
+}
+$('vSemana').addEventListener('change', verHO);
+$('vBuscar').addEventListener('input', pintarVer);
 
 // ---------- trabajadores ----------
 function pintarTrab() {
@@ -605,6 +689,26 @@ function pintarEstilos() {
   }));
 }
 $('eBuscar').addEventListener('input', pintarEstilos);
+function pintarClientes() {
+  $('cTabla').innerHTML = '<tr><th>Cliente</th><th class="n">T. Total por prenda</th><th></th></tr>' +
+    (DATOS.clientes || []).map(c => `<tr><td>${esc(c.cliente)}</td><td class="n">${fmt(c.std, 2)}</td><td><button class="link" data-c="${esc(c.cliente)}">Editar</button></td></tr>`).join('');
+  $('cTabla').querySelectorAll('.link').forEach(b => b.addEventListener('click', () => {
+    const c = DATOS.clientes.find(x => x.cliente === b.dataset.c); $('cCliente').value = c.cliente; $('cStd').value = c.std ?? ''; }));
+  $('kTabla').innerHTML = '<tr><th>Categoría</th><th class="n">Minutos por prenda</th></tr>' +
+    (DATOS.categoriasPlancha || []).map(k => `<tr><td>${esc(k.categoria)}</td><td class="n">${fmt(k.minutos, 2)}</td></tr>`).join('');
+}
+$('cGuardar').addEventListener('click', () => {
+  const b = $('cGuardar'); b.disabled = true;
+  api('guardarCliente', { cliente: $('cCliente').value, std: $('cStd').value })
+    .then(r => { if (r.ok) { msg('cMsg', 'ok', '✅ Guardado: ' + esc(r.cliente)); cargar(); } else msg('cMsg', 'err', esc(r.error)); })
+    .finally(() => b.disabled = false);
+});
+$('kGuardar').addEventListener('click', () => {
+  const b = $('kGuardar'); b.disabled = true;
+  api('guardarCategoria', { categoria: $('kCat').value, minutos: $('kMin').value })
+    .then(r => { if (r.ok) { msg('kMsg', 'ok', '✅ Guardado: categoría ' + esc(r.categoria)); cargar(); } else msg('kMsg', 'err', esc(r.error)); })
+    .finally(() => b.disabled = false);
+});
 $('eNuevo').addEventListener('click', () => { ['eEstilo', 'eCliente', 'eTotal', 'eVap', 'ePlancha', 'eDob', 'eObs'].forEach(i => $(i).value = ''); limpiarMsg('eMsg'); });
 $('eGuardar').addEventListener('click', () => {
   const b = $('eGuardar'); b.disabled = true;
