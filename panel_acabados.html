@@ -420,7 +420,7 @@ input:focus,select:focus,textarea:focus{outline:2px solid rgba(15,122,90,.25);bo
       <p class="ayuda" id="eConteo" style="margin-top:8px"></p></div>
   </section>
 
-  <div class="card ayuda-final"><b>¿Cómo uso este panel?</b> Reemplaza lo que antes se editaba a mano en el Sheet.
+  <div class="card ayuda-final"><b>¿Cómo uso este panel?</b> Reemplaza lo que antes se editaba a mano en la hoja de cálculo.
     Las horas se suben por semana y siempre se revisan antes de guardar. Todo cambio queda registrado con tu usuario.
     La semana ya no se escribe en ningún lado: sale sola de la fecha de cada registro.</div>
 </div>
@@ -469,7 +469,7 @@ function pintarSemanas() {
   const sel = $('hSemana'), previo = sel.value, opciones = {};
   (DATOS.semanas || []).filter(s => s.estado === 'abierta').forEach(s => opciones[s.lunes] = s);
   const act = new Date(DATOS.semanaActiva + 'T00:00:00');
-  for (let k = -1; k <= 1; k++) { const d = new Date(act); d.setDate(d.getDate() + 7 * k); const l = iso(d);
+  for (let k = 0; k <= 2; k++) { const d = new Date(act); d.setDate(d.getDate() + 7 * k); const l = iso(d);
     const s = (DATOS.semanas || []).find(x => x.lunes === l); if (!s || s.estado === 'abierta') opciones[l] = s || { lunes: l }; }
   sel.innerHTML = Object.keys(opciones).sort().map(l => { const s = opciones[l];
     return `<option value="${l}">Semana ${s.numero || ''} · lunes ${ddmm(l)}${l === DATOS.semanaActiva ? ' (en curso)' : ''}${s.horas ? ' · ya tiene horas' : ''}</option>`; }).join('');
