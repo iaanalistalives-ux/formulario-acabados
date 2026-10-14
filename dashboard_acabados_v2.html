@@ -2418,44 +2418,99 @@ button.lsTemaBtn .lsTemaTxt{display:none;font-size:13px;font-weight:700}
   'use strict';
   if (window.__lsAct) return; window.__lsAct = true;
   if (!/^https?:$/.test(location.protocol)) return;
-  var url = location.origin + location.pathname, base = null, hasta = 0, mostrado = false;
+  var url = location.origin + location.pathname, base = null, pendiente = false, ultimaTecla = 0;
+  /* Mientras la persona escribe no se interrumpe: se espera a que pasen 20 s sin teclear. */
+  ['input','keydown','change'].forEach(function(ev){
+    document.addEventListener(ev, function(e){ if (!e.target || !e.target.closest || !e.target.closest('#lsAct')) ultimaTecla = Date.now(); }, true);
+  });
+  /* v2.2 (14/10/2026): el aviso NUNCA corta un trabajo a medias. Se recuerdan los campos que la persona tocó y su
+     valor inicial; mientras alguno siga con algo escrito sin guardar (o haya una venta en curso, o haya usado la
+     pantalla en los últimos 3 minutos), el aviso espera. Sale cuando la pantalla queda libre (p. ej. después de
+     guardar, cuando el formulario se limpia). La actualización solo trae cambios de pantalla: no toca datos. */
+  var tocados = [], ultimoUso = 0;
+  function valorDe(el){ if (el.type === 'checkbox' || el.type === 'radio') return el.checked ? '1' : '0'; if (el.type === 'file') return (el.files && el.files.length) ? 'f' + el.files.length : ''; return el.value == null ? '' : String(el.value); }
+  document.addEventListener('focusin', function(e){ var el = e.target; if (!el || !el.matches || !el.matches('input,textarea,select,[contenteditable="true"]') || (el.closest && el.closest('#lsAct'))) return; if (!('__lsIni' in el)){ try { el.__lsIni = el.isContentEditable ? el.textContent : valorDe(el); } catch(x){} } }, true);
+  ['input','change'].forEach(function(ev){ document.addEventListener(ev, function(e){ var el = e.target; if (!e.isTrusted || !el || (el.closest && el.closest('#lsAct'))) return; if (!('__lsIni' in el)) el.__lsIni = ''; if (tocados.indexOf(el) < 0) tocados.push(el); }, true); });
+  ['pointerdown','keydown','input','wheel','touchstart'].forEach(function(ev){ document.addEventListener(ev, function(e){ if (e.isTrusted && !(e.target && e.target.closest && e.target.closest('#lsAct'))) ultimoUso = Date.now(); }, true); });
+  function ocupado(){
+    if (Date.now() - ultimoUso < 3 * 60000) return true;
+    for (var i = 0; i < tocados.length; i++){ var el = tocados[i]; try { if (!el.isConnected) continue; var v = el.isContentEditable ? el.textContent : valorDe(el); if (v !== el.__lsIni && String(v).trim() !== '') return true; } catch(x){} }
+    try { if (typeof window.lsTrabajoPendiente === 'function' && window.lsTrabajoPendiente()) return true; } catch(x){}
+    try { if (Function('return typeof CART!=="undefined"&&Array.isArray(CART)&&CART.length>0')()) return true; } catch(x){}
+    return false;
+  }
   /* v3 (14/10/2026): la firma es el CONTENIDO de esta pantalla, no la fecha de publicación del repositorio.
      GitHub vuelve a publicar todas las pantallas de un repositorio aunque solo cambie una, y sus servidores
      pueden responder fechas distintas un rato: eso hacía salir el aviso sin que la pantalla cambiara.
      Ahora: se mira la cabecera (barato) y solo si cambió se baja la pantalla y se compara su contenido. */
-  var _et = null, _h = null;
+  /* v2.1 (14/10/2026): GitHub Pages responde desde varios servidores y, durante unos minutos después de publicar,
+     unos dan la versión nueva y otros la vieja. Por eso el aviso salía varias veces seguidas. Ahora toda consulta
+     lleva una marca única (?_lsact=…) que obliga a leer la versión publicada de verdad, el cambio se confirma con
+     dos lecturas iguales y "Actualizar" carga la pantalla con esa misma marca, para no volver a recibir la vieja. */
+  var _et = null, _h = null, _cand = null;
   function huella(t){ var h = 2166136261; for (var i = 0; i < t.length; i++){ h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16) + '-' + t.length; }
+  function fresco(){ return url + '?_lsact=' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
   function firma(){
-    return fetch(url, { method: 'HEAD', cache: 'no-store' }).then(function(r){
+    return fetch(fresco(), { method: 'HEAD', cache: 'no-store' }).then(function(r){
       if (!r.ok) return null;
       var et = r.headers.get('etag') || r.headers.get('last-modified') || '';
-      if (_h !== null && _et !== null && et === _et) return _h;
-      var primera = (_h === null);
-      return fetch(url, { cache: primera ? 'force-cache' : 'no-store' }).then(function(g){ return g.ok ? g.text() : null; }).then(function(t){
+      if (_h !== null && et && et === _et) return _h;
+      return fetch(fresco(), { cache: 'no-store' }).then(function(g){ return g.ok ? g.text() : null; }).then(function(t){
         if (t === null) return _h;
-        _h = huella(t); _et = primera ? null : et; return _h;
+        _h = huella(t); _et = et; return _h;
       });
     }).catch(function(){ return null; });
   }
+  function recargar(){
+    /* Si la herramienta guarda borrador (p. ej. el formulario de auditoría), se guarda antes de recargar. */
+    if (ultimaTecla){
+      ['guardarBorradorAhora','guardarBorradorPeriodico','guardarBorrador'].some(function(n){
+        try { if (typeof window[n] === 'function'){ window[n](); return true; } } catch(e){}
+        return false;
+      });
+    }
+    setTimeout(function(){
+      try { var u = new URL(location.href); u.searchParams.set('_lsact', Date.now().toString(36)); location.replace(u.toString()); }
+      catch(e){ location.reload(); }
+    }, 150);
+  }
   function aviso(){
-    if (mostrado || Date.now() < hasta) return;
+    if (document.getElementById('lsAct') && document.getElementById('lsAct').style.display === 'flex') return;
+    if (Date.now() - ultimaTecla < 20000 || ocupado()) return;   /* se vuelve a intentar solo, cada 1,5 s */
     var d = document.getElementById('lsAct');
     if (!d){
-      d = document.createElement('div'); d.id = 'lsAct'; d.setAttribute('role', 'status');
-      d.innerHTML = '<span><b>Hay una versión nueva de esta herramienta.</b> Guarda lo que estés haciendo y toca Actualizar.</span>' +
-                    '<button id="lsActSi" type="button">Actualizar</button><button id="lsActNo" type="button">Después</button>';
-      document.body.appendChild(d);
-      document.getElementById('lsActSi').onclick = function(){ location.reload(); };
-      document.getElementById('lsActNo').onclick = function(){ d.style.display = 'none'; mostrado = false; hasta = Date.now() + 10 * 60000; };
+      d = document.createElement('div'); d.id = 'lsAct';
+      d.setAttribute('role', 'alertdialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-labelledby', 'lsActT');
+      d.innerHTML = '<div class="lsActCaja"><div class="lsActIco" aria-hidden="true">&#8635;</div>' +
+        '<h2 id="lsActT">Hay una versión nueva</h2>' +
+        '<p>Esta herramienta se actualizó. Toca <b>Actualizar</b> para seguir trabajando con la versión nueva.</p>' +
+        '<button id="lsActSi" type="button">Actualizar</button></div>';
+      (document.body || document.documentElement).appendChild(d);
+      document.getElementById('lsActSi').onclick = recargar;
     }
-    d.style.display = 'flex'; mostrado = true;
+    d.style.display = 'flex';
+    document.documentElement.style.overflow = 'hidden';
+    var b = document.getElementById('lsActSi'); if (b) b.focus();
   }
+  /* No se puede cerrar: Escape no hace nada, el foco no sale del aviso y si algo lo quita vuelve a salir. */
+  document.addEventListener('keydown', function(e){
+    var d = document.getElementById('lsAct'); if (!d || d.style.display !== 'flex') return;
+    if (e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); }
+    if (e.key === 'Tab'){ e.preventDefault(); var b = document.getElementById('lsActSi'); if (b) b.focus(); }
+  }, true);
+  setInterval(function(){
+    if (!pendiente) return;
+    var d = document.getElementById('lsAct');
+    if (!d || d.style.display !== 'flex') aviso();
+  }, 1500);
   function revisar(){
-    if (document.hidden) return;
+    if (document.hidden || pendiente) return;
     firma().then(function(f){
       if (!f) return;
       if (base === null){ base = f; return; }
-      if (f !== base) aviso();
+      if (f === base){ _cand = null; return; }
+      if (_cand !== f){ _cand = f; setTimeout(function(){ _et = null; revisar(); }, 45000); return; }   /* se confirma con una segunda lectura */
+      pendiente = true; aviso();
     });
   }
   revisar();
