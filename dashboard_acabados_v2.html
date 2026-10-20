@@ -1207,7 +1207,7 @@ $('btnExportar').addEventListener('click', async () => {
   const btn = $('btnExportar');
   btn.disabled = true; btn.textContent = 'Generando...';
   try {
-    const r = await apiFetch(URL_APPS_SCRIPT, { method: 'POST', body: JSON.stringify({ tipo: 'exportar', vista: vista }) });
+    const r = await apiFetch(URL_APPS_SCRIPT, { method: 'POST', body: JSON.stringify({ tipo: 'exportar', vista: vista, lunes: window._lunesExport || undefined }) });
     const d = await r.json();
     if (!d.ok) throw new Error(d.error || 'la base de datos no devolvió los datos');
     await exportarExcelAcabados(d);
@@ -1275,7 +1275,10 @@ function cargarHistorico(semana, anio) {
 function renderHistorico(data) {
   if (!data.ok) { err('No se pudo cargar esa semana: ' + (data.error || '')); return; }
   renderAvisoDatos(null); // el aviso es solo de la semana en vivo
-  $('btnExportar').disabled = true; // en semanas archivadas no se exporta (las hojas crudas ya se limpiaron)
+  // 20-oct-2026: las semanas cerradas ya se exportan (el detalle digitado se guarda para siempre;
+  // % Efi e Incentivo salen del pago congelado al cerrar).
+  window._lunesExport = data.fechaInicio || null;
+  $('btnExportar').disabled = false;
 
   const rows = data.rows || [];
   window._rows = rows;
@@ -1383,6 +1386,7 @@ function renderHistorico(data) {
 
 function render(data){
   $('avisoArchivo').classList.add('hidden');
+  window._lunesExport = null;
   $('btnExportar').disabled = false;
   const ef=data.eficiencias, inc=data.incentivos, gr=data.grupos, par=data.parametros;
   if(!ef||!inc){err((data && data.error) ? data.error : 'La base de datos no devolvió los datos de la semana. Pulsa Actualizar.');return;}
