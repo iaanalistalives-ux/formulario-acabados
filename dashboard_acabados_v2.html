@@ -1203,7 +1203,7 @@ async function exportarExcelAcabados(d) {
   const S = d.semanal || [];
   if (S.length) {
     const hs = wb.addWorksheet('MIN_PROD_SEMANAL');
-    const enc = ['Año', 'Semana', 'Desde', 'Hasta', 'DOBLADO', 'PLANCHA', 'VAPOR', 'TOTAL ACABADOS', 'Estado'];
+    const enc = ['Año', 'Semana', 'Desde', 'Hasta', 'DOBLADO', 'PLANCHA', 'VAPOR', 'TOTAL ACABADOS', 'DISP. DOBLADO', 'DISP. PLANCHA', 'DISP. VAPOR', 'TOTAL DISPONIBLES', 'Estado'];
     const n = enc.length, AREAS_S = ['DOBLADO', 'PLANCHA', 'VAPOR'];
     const BORDE = { bottom: { style: 'hair', color: { argb: 'FFDCE5E2' } } };
     const banda = (fila, texto, fondo, font, alto, indent) => {
@@ -1218,11 +1218,11 @@ async function exportarExcelAcabados(d) {
     const ahora = new Date();
     const hoy = ahora.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' ' +
                 ahora.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-    banda(1, 'MINUTOS PRODUCIDOS POR SEMANA — ÁREA ACABADOS', XL_PET, { size: 13, bold: true, color: { argb: 'FFFFFFFF' } }, 34, 18);
+    banda(1, 'MINUTOS PRODUCIDOS Y DISPONIBLES POR SEMANA — ÁREA ACABADOS', XL_PET, { size: 13, bold: true, color: { argb: 'FFFFFFFF' } }, 34, 18);
     if (XL_LOGO_B64) hs.addImage(wb.addImage({ base64: XL_LOGO_B64, extension: 'png' }), { tl: { col: 0.12, row: 0.22 }, ext: { width: 120, height: 31 } });
     banda(2, 'Semanas ' + S[0].semana + ' a ' + S[S.length - 1].semana + (abierta ? ' · semana ' + abierta.semana + ' en curso, datos al ' + hoy : ''),
           'FF4E6B78', { size: 10, bold: true, color: { argb: 'FFFFFFFF' } }, 18);
-    banda(3, 'Min Prod = prendas digitadas × minuto estándar, más las prendas rechazadas en auditoría × su estándar (Doblado). Es el mismo Min Prod de la eficiencia. Encajado no se incluye: no se digita su producción. Filtra la columna Semana: la fila Total suma solo las semanas que quedan a la vista.',
+    banda(3, 'Min Prod = prendas digitadas × minuto estándar, más las prendas rechazadas en auditoría × su estándar (Doblado). Es el mismo Min Prod de la eficiencia. DISP. = minutos disponibles = Min Asist + Apoyo − Improductivos (el denominador de la eficiencia); en las semanas 29 a 35 no se guardó el apoyo. Encajado no se incluye: no se digita su producción. Filtra la columna Semana: la fila Total suma solo las semanas que quedan a la vista.',
           null, { size: 9, italic: true, color: { argb: 'FF5F726C' } }, 30);
     enc.forEach((v, i) => {
       const c = hs.getCell(4, i + 1);
@@ -1235,16 +1235,18 @@ async function exportarExcelAcabados(d) {
       const desde = xlFecha(s.lunes), hasta = new Date(desde.getTime() + 6 * 864e5);
       const vals = AREAS_S.map(a => s[a] == null ? null : Number(s[a]));
       const tot = s.sinDato ? null : vals.reduce((x, y) => x + (y || 0), 0);
+      const disp = AREAS_S.map(a => s['DISP_' + a] == null ? null : Number(s['DISP_' + a]));
+      const totD = s.sinDato ? null : disp.reduce((x, y) => x + (y || 0), 0);
       const estado = s.estado === 'en curso' ? 'En curso' : (s.sinDato ? 'Cerrada · sin producción guardada' : 'Cerrada');
-      [s.anio, s.semana, desde, hasta].concat(vals, [tot, estado]).forEach((v, k) => {
+      [s.anio, s.semana, desde, hasta].concat(vals, [tot], disp, [totD, estado]).forEach((v, k) => {
         const c = hs.getCell(fs, k + 1);
         c.value = v; c.border = BORDE; c.font = { name: 'Calibri' };
         if (i % 2 === 1) c.fill = xlFondo(XL_GRIS);
         if (k < 2) c.numFmt = '0';
         else if (k < 4) c.numFmt = 'dd/mm/yyyy';
-        else if (k < 8) c.numFmt = '#,##0';
+        else if (k < 12) c.numFmt = '#,##0';
         else c.numFmt = '@';
-        if (k === 7) c.font = { name: 'Calibri', bold: true };
+        if (k === 7 || k === 11) c.font = { name: 'Calibri', bold: true };
       });
       fs++;
     });
@@ -1253,21 +1255,22 @@ async function exportarExcelAcabados(d) {
     const borde2 = { top: { style: 'medium', color: { argb: XL_PET } } };
     const cT = hs.getCell(fs, 1);
     cT.value = 'Total semanas a la vista'; cT.font = { name: 'Calibri', bold: true }; cT.fill = xlFondo(XL_VERDE); cT.border = borde2;
-    for (let k = 5; k <= 8; k++) {
+    for (let k = 5; k <= 12; k++) {
       const col = String.fromCharCode(64 + k);
-      const suma = S.reduce((x, s) => x + (s.sinDato ? 0 : (k === 8 ? AREAS_S.reduce((y, a) => y + Number(s[a] || 0), 0) : Number(s[AREAS_S[k - 5]] || 0))), 0);
+      const pre = k > 8 ? 'DISP_' : '';
+      const suma = S.reduce((x, s) => x + (s.sinDato ? 0 : ((k === 8 || k === 12) ? AREAS_S.reduce((y, a) => y + Number(s[pre + a] || 0), 0) : Number(s[pre + AREAS_S[(k - 5) % 4]] || 0))), 0);
       const c = hs.getCell(fs, k);
       c.value = { formula: 'SUBTOTAL(109,' + col + '5:' + col + ultima + ')', result: suma };
       c.numFmt = '#,##0'; c.font = { name: 'Calibri', bold: true }; c.fill = xlFondo(XL_VERDE); c.border = borde2;
     }
-    const cE = hs.getCell(fs, 9); cE.fill = xlFondo(XL_VERDE); cE.border = borde2;
+    const cE = hs.getCell(fs, 13); cE.fill = xlFondo(XL_VERDE); cE.border = borde2;
     hs.views = [{ state: 'frozen', xSplit: 2, ySplit: 4 }];
     hs.autoFilter = { from: { row: 4, column: 1 }, to: { row: ultima, column: n } };
     hs.mergeCells(fs + 2, 1, fs + 2, n);
     const cP = hs.getCell(fs + 2, 1);
     cP.value = 'Generado el ' + hoy + ' desde Dashboard Acabados · ' + S.length + ' semana(s)';
     cP.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF5F726C' } };
-    [9, 9, 12, 12, 12, 12, 12, 17, 32].forEach((w, i) => { hs.getColumn(i + 1).width = w; });
+    [9, 9, 12, 12, 12, 12, 12, 17, 14, 14, 14, 19, 32].forEach((w, i) => { hs.getColumn(i + 1).width = w; });
   }
 
   const buf = await wb.xlsx.writeBuffer();
