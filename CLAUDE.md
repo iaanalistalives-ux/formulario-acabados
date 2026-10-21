@@ -25,7 +25,7 @@ Una sola puerta: `acabados_api(p_accion, p)`, responde JSON. Es el contrato que 
 
 ## Quién la usa
 - Ver: quien entra por el portal (lectura libre en Supabase).
-- Registrar: `acabados_puede_escribir_()` — superusuario, ctalepcio o quien tenga en la tabla `permisos` el formulario o el panel de Acabados. Es la pieza que Sistemas reemplaza con su seguridad.
+- Registrar: `acabados_puede_escribir_()` — superusuario o quien tenga en la tabla `permisos` el formulario o el panel de Acabados. Es la pieza que Sistemas reemplaza con su seguridad.
 - La responsable de Acabados digita, carga las horas y cierra la semana.
 
 ## Reglas propias
