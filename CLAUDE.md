@@ -21,7 +21,7 @@ Una sola puerta: `acabados_api(p_accion, p)`, responde JSON. Es el contrato que 
 - Cálculo: `acabados_calc_modulos` y `acabados_calc_personas` (semana abierta). Eficiencia = Min Prod ÷ (Min Asist + Apoyo − Improductivos), ponderada.
 - Excel: `acabados_exportar_` (incluye `acabados_resumen_mensual_` y `acabados_min_prod_semanal_`).
 - Semanas 29 a 37 vienen del Sheet antiguo: solo queda lo archivado. Las semanas 29 a 35 no guardaron el apoyo.
-- Semana 36: se cerró dos veces en el Sheet y la carga tomó la copia en ceros; se recuperó del primer cierre el 21/10/2026 (respaldo de lo anterior en `acabados_resp_sem36_*`).
+- Semana 36: se cerró dos veces en el Sheet y la carga tomó la copia en ceros; se recuperó del primer cierre el 21/10/2026.
 
 ## Quién la usa
 - Ver: quien entra por el portal (lectura libre en Supabase).
