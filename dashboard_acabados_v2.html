@@ -2482,19 +2482,33 @@ button.lsTemaBtn .lsTemaTxt{display:none;font-size:13px;font-weight:700}
   inicio();
 }catch(e){try{document.documentElement.classList.remove('lsTemaPrep');}catch(_){}}})();</script>
 <!-- ===== fin lives-tema v1 (final) ===== -->
-<!-- ===== lives-actualizar v1 · 2026-10-06 · aviso de versión nueva (común a todas las herramientas).
-     Revisa cada 3 minutos (y al volver a la pestaña) si el archivo publicado cambió. Si cambió,
-     muestra "Hay una versión nueva · Actualizar". Nunca recarga sola: la persona decide, así no
-     pierde lo que está llenando. Solo pide el encabezado del archivo (HEAD), no lo descarga. ===== -->
+<!-- ===== lives-actualizar v2 · 2026-10-12 · aviso de versión nueva OBLIGATORIO (común a todas las herramientas).
+     Revisa cada 3 minutos (y al volver a la pestaña) si el archivo publicado cambió. Si cambió, tapa la
+     herramienta con un aviso que no se puede cerrar: un solo botón, "Actualizar". En celular ocupa toda la
+     pantalla; en computadora sale al centro. No aparece mientras la persona está escribiendo (espera a que
+     pase 20 s sin teclear) y, antes de recargar, pide a la herramienta que guarde su borrador si tiene uno.
+     Solo pide el encabezado del archivo (HEAD), no lo descarga. ===== -->
 <style id="lsActCss">
-#lsAct{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:2147483000;display:none;
-  align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 32px);
-  background:#0E3B36;color:#fff;border:2px solid #10B981;border-radius:12px;padding:10px 14px;
-  box-shadow:0 8px 24px rgba(14,59,54,.30);font-family:Calibri,Arial,sans-serif;font-size:14px;line-height:1.35}
-#lsAct b{font-weight:700}
-#lsAct button{font-family:inherit;font-size:14px;font-weight:700;border-radius:8px;padding:8px 14px;cursor:pointer;min-height:38px}
-#lsActSi{background:#10B981;color:#0E3B36;border:none}
-#lsActNo{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.55)}
+#lsAct{position:fixed;inset:0;z-index:2147483000;display:none;align-items:center;justify-content:center;
+  background:rgba(14,59,54,.78);padding:16px;font-family:Calibri,Arial,sans-serif}
+#lsAct .lsActCaja{background:#fff;border-radius:12px;border-top:4px solid #10B981;box-shadow:0 10px 30px rgba(0,0,0,.25);
+  max-width:440px;width:100%;padding:26px 24px 22px;text-align:center;color:#1a1a1a}
+#lsAct .lsActIco{width:56px;height:56px;margin:0 auto 12px;border-radius:50%;background:#E7F6EF;color:#0F7A5A;
+  display:flex;align-items:center;justify-content:center;font-size:30px;line-height:1}
+#lsAct h2{margin:0 0 8px;font-size:21px;color:#0E3B36}
+#lsAct p{margin:0 0 18px;font-size:15.5px;line-height:1.45;color:#3d4f4b}
+#lsActSi{display:block;width:100%;background:#0F7A5A;color:#fff;border:none;border-radius:10px;font-family:inherit;
+  font-size:17px;font-weight:700;padding:14px 16px;min-height:52px;cursor:pointer}
+#lsActSi:hover{background:#0B6349}
+#lsActSi:focus{outline:3px solid #10B981;outline-offset:2px}
+@media (max-width:640px){
+  #lsAct{padding:0;background:#fff}
+  #lsAct .lsActCaja{max-width:none;height:100%;border-radius:0;box-shadow:none;border-top:6px solid #10B981;
+    display:flex;flex-direction:column;justify-content:center;padding:32px 22px}
+  #lsAct h2{font-size:24px}
+  #lsAct p{font-size:17px}
+  #lsActSi{font-size:19px;min-height:58px}
+}
 @media print{#lsAct{display:none!important}}
 </style>
 <script id="lsActJs">(function(){
@@ -2517,7 +2531,7 @@ button.lsTemaBtn .lsTemaTxt{display:none;font-size:13px;font-weight:700}
   ['pointerdown','keydown','input','wheel','touchstart'].forEach(function(ev){ document.addEventListener(ev, function(e){ if (e.isTrusted && !(e.target && e.target.closest && e.target.closest('#lsAct'))) ultimoUso = Date.now(); }, true); });
   function ocupado(){
     if (Date.now() - ultimoUso < 3 * 60000) return true;
-    for (var i = 0; i < tocados.length; i++){ var el = tocados[i]; try { if (!el.isConnected) continue; var v = el.isContentEditable ? el.textContent : valorDe(el); if (v !== el.__lsIni && String(v).trim() !== '') return true; } catch(x){} }
+    for (var i = 0; i < tocados.length; i++){ var el = tocados[i]; try { if (!el.isConnected) continue; if (el.closest && el.closest('[data-ls-fijo]')) continue; var v = el.isContentEditable ? el.textContent : valorDe(el); if (v !== el.__lsIni && String(v).trim() !== '') return true; } catch(x){} }
     try { if (typeof window.lsTrabajoPendiente === 'function' && window.lsTrabajoPendiente()) return true; } catch(x){}
     try { if (Function('return typeof CART!=="undefined"&&Array.isArray(CART)&&CART.length>0')()) return true; } catch(x){}
     return false;
@@ -2590,7 +2604,15 @@ button.lsTemaBtn .lsTemaTxt{display:none;font-size:13px;font-weight:700}
     if (document.hidden || pendiente) return;
     firma().then(function(f){
       if (!f) return;
-      if (base === null){ base = f; return; }
+      if (base === null){
+        /* v2.3: la base es la copia con la que se abrió esta pantalla (la guardada por el navegador), no la última publicada.
+           v2.4 (02/11/2026): solo si esa copia es reciente (<11 min, lo que dura la caché de GitHub). Una copia más vieja nunca fue la que se mostró (el portal de Sistemas abre la pantalla sin usar la caché) y hacía salir el aviso en cada apertura. */
+        fetch(location.href, { cache: 'force-cache' }).then(function(r){ var dt = Date.parse(r.headers.get('date') || ''); return (r.ok && dt && Date.now() - dt < 11 * 60000) ? r.text() : null; }).then(function(t){ return t === null ? f : huella(t); }, function(){ return f; }).then(function(b){
+          base = b;
+          if (b !== f){ _cand = f; setTimeout(function(){ _et = null; revisar(); }, 45000); }
+        });
+        return;
+      }
       if (f === base){ _cand = null; return; }
       if (_cand !== f){ _cand = f; setTimeout(function(){ _et = null; revisar(); }, 45000); return; }   /* se confirma con una segunda lectura */
       pendiente = true; aviso();
@@ -2600,7 +2622,7 @@ button.lsTemaBtn .lsTemaTxt{display:none;font-size:13px;font-weight:700}
   setInterval(revisar, 3 * 60000);
   document.addEventListener('visibilitychange', function(){ if (!document.hidden) revisar(); });
 })();</script>
-<!-- ===== fin lives-actualizar v1 ===== -->
+<!-- ===== fin lives-actualizar v2 ===== -->
 
 
 
