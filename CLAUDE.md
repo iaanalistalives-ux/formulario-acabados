@@ -9,6 +9,7 @@ Encajado está excluido de todo el tablero: no se digita su producción.
 ## Pantallas
 - `dashboard_acabados_v2.html` — Dashboard Acabados: KPI, gráficos, detalle por trabajador, semanas cerradas y vista Mensual/Anual. Solo lee.
   Botón "Exportar vista a Excel" con 4 hojas: RESUMEN, REGISTROS, MENSUAL_ANUAL y MIN_PROD_SEMANAL (minutos producidos y disponibles por semana y área, todas las semanas, con autofiltro; disponibles = Min Asist + Apoyo − Improductivos).
+- `dashboard_acabados_v2.html` también lleva el botón **＋ Registrar** (desde el 05/11/2026): abre `formulario_acabados.html?embebido=1` en una ventana encima (modal, completa en celular). El botón consulta `acabados_puede_escribir_`; sin permiso sale gris "Solo para quien registra". Lo guardado queda en la semana abierta y se sigue al volver a entrar hasta Cerrar semana; el dashboard se actualiza solo 1,5 s después de cada guardado y al cerrar. Pide "¿Salir sin guardar?" si hay datos escritos. El formulario sigue teniendo su link directo.
 - `formulario_acabados.html` — Digitación Acabados: producción por módulo, rechazo de auditoría, sistema DOB, asignar módulo, corregir/eliminar filas y Cerrar semana.
 - `panel_acabados.html` — Panel de Acabados: carga de horas (HO), trabajadores, módulos, estándares por estilo, cliente y categoría.
 

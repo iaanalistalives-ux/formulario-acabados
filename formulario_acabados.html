@@ -1112,8 +1112,14 @@ html[data-tema="oscuro"] #lsCarga img{filter:invert(1)!important;opacity:.9!impo
       delete datos.accion;
     }
     if (accion === 'limpiarTodo') return Promise.resolve(respuestaJson({ ok: false, error: 'Esta opción ya no existe.' }));
+    const esEscritura = !!(opciones && opciones.body);
     return llamarAcabados(accion, datos)
-      .catch(() => new Promise(ok => setTimeout(ok, 1500)).then(() => llamarAcabados(accion, datos)));
+      .catch(() => new Promise(ok => setTimeout(ok, 1500)).then(() => llamarAcabados(accion, datos)))
+      .then(r => {
+        // Dentro de la ventana "Registrar" del dashboard: avisa que se guardó algo para que el dashboard se actualice.
+        if (esEscritura && window.lsRegGuardado) { try { r.clone().json().then(j => { if (!j || j.ok !== false) window.lsRegGuardado(); }).catch(() => {}); } catch (e) {} }
+        return r;
+      });
   }
 
   let trabajadores = {};
@@ -3033,5 +3039,12 @@ button.lsTemaBtn .lsTemaTxt{display:none;font-size:13px;font-weight:700}
   if(document.body)inicio();else document.addEventListener('DOMContentLoaded',inicio);
 }catch(e){}})();</script>
 <!-- ===== fin lives-franja v5 ===== -->
+<script id="lsRegFormJs">(function(){try{
+if(!/[?&]embebido=1/.test(location.search)||window.parent===window)return;
+var sucio=false;
+document.addEventListener('input',function(e){var t=e.target;if(t&&/^(INPUT|TEXTAREA)$/.test(t.tagName)&&t.type!=='checkbox'&&t.type!=='radio'&&!t.readOnly&&!(t.closest&&t.closest('[data-ls-fijo]')))sucio=true;},true);
+window.addEventListener('message',function(e){if(e.source!==window.parent||!e.data)return;if(e.data.ls==='sucio?')window.parent.postMessage({ls:'sucio',valor:sucio},location.origin);});
+window.lsRegGuardado=function(){sucio=false;window.parent.postMessage({ls:'guardado'},location.origin);};
+}catch(x){}})();</script>
 </body>
 </html>
