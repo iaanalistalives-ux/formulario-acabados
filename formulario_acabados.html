@@ -594,6 +594,14 @@ html[data-tema="oscuro"] #lsCarga img{filter:invert(1)!important;opacity:.9!impo
     display: none;
   }
   .integrantes-box.visible { display: block; }
+  /* 06-nov-2026: personas con horas un día sin módulo asignado (el cálculo las pone en su módulo actual) */
+  .aviso-sin-modulo { display: none; border-left: 4px solid var(--aviso); background: rgba(217,119,6,0.10); border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; font-size: 13px; line-height: 1.45; }
+  .aviso-sin-modulo.visible { display: block; }
+  .aviso-sin-modulo b.tit { color: var(--aviso); display: block; margin-bottom: 4px; }
+  .aviso-sin-modulo ul { margin: 4px 0 6px 18px; padding: 0; }
+  .aviso-sin-modulo li { margin: 2px 0; }
+  .aviso-sin-modulo .ir-fecha { background: none; border: none; padding: 0 2px; color: var(--aviso); font-weight: bold; text-decoration: underline; cursor: pointer; font-size: 13px; }
+  .aviso-sin-modulo .ayuda { font-size: 12px; opacity: .85; }
   .integrantes-box .label { font-size: 12px; color: var(--gris); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
   .link-editar {
     background: none; border: none; color: var(--esmeralda);
@@ -848,6 +856,7 @@ html[data-tema="oscuro"] #lsCarga img{filter:invert(1)!important;opacity:.9!impo
     <button type="button" class="agregar-colaborador" id="btn-agregar-colaborador" style="display:none">+ Agregar otro colaborador</button>
     <button type="button" id="btn-guardar-integrantes" class="agregar-colaborador" style="display:none">Guardar esta asignación</button>
   </div>
+  <div class="aviso-sin-modulo" id="aviso-sin-modulo" role="alert"></div>
 
   <nav class="tabs">
     <button data-tab="produccion" type="button">↓ Producción</button>
@@ -1293,6 +1302,7 @@ html[data-tema="oscuro"] #lsCarga img{filter:invert(1)!important;opacity:.9!impo
           if (info) info.integrantes = integrantes.map(c => ({ cod: c, nombre: trabajadores[c] ? trabajadores[c].nombre : c }));
           salirModoEdicion();
           mostrarIntegrantesAutomaticos();
+          cargarSinModulo();
           if (res.aviso) alert(res.aviso);
         } else {
           alert(res.error || 'No se pudo guardar la asignación.');
@@ -1301,6 +1311,46 @@ html[data-tema="oscuro"] #lsCarga img{filter:invert(1)!important;opacity:.9!impo
       .catch(() => alert('No se pudo conectar. Intenta de nuevo.'))
       .finally(() => { btn.disabled = false; btn.textContent = 'Guardar esta asignación'; });
   });
+
+  // --- 06-nov-2026: aviso de personas con horas un día sin módulo asignado ---
+  // El cálculo de eficiencia las cuenta en su módulo actual aunque ese día no
+  // estuvieran ahí (así una persona de más bajaba la eficiencia del módulo).
+  // Solo lee: sale mientras haya casos en las semanas abiertas.
+  function cargarSinModulo() {
+    const caja = $('aviso-sin-modulo');
+    apiFetch(URL_APPS_SCRIPT + '?accion=sinModulo')
+      .then(r => r.json())
+      .then(res => {
+        const casos = (res && res.ok && res.casos) || [];
+        if (!casos.length) { caja.classList.remove('visible'); caja.innerHTML = ''; return; }
+        const porPersona = {};
+        casos.forEach(c => {
+          const k = c.codigo;
+          (porPersona[k] = porPersona[k] || { nombre: c.nombre, codigo: c.codigo, area: c.area, mods: {}, fechas: [] });
+          porPersona[k].fechas.push(c.fecha);
+          porPersona[k].mods[c.seCuentaEn || ''] = 1;
+        });
+        const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+        const dm = f => f.slice(8, 10) + '/' + f.slice(5, 7);
+        const items = Object.values(porPersona).map(p => {
+          const fechas = p.fechas.map(f => `<button type="button" class="ir-fecha" data-area="${esc(p.area)}" data-fecha="${esc(f)}">${dm(f)}</button>`).join(', ');
+          const mods = Object.keys(p.mods).filter(Boolean);
+          const cuenta = mods.length ? `hoy se cuenta en <b>${esc(mods.join(', '))}</b>` : 'hoy no se cuenta en ningún módulo';
+          return `<li><b>${esc(p.nombre)}</b> (${esc(p.codigo)}) · ${esc(p.area)} · ${fechas} → ${cuenta}</li>`;
+        }).join('');
+        caja.innerHTML = '<b class="tit">⚠ Con horas y sin módulo asignado</b><ul>' + items + '</ul>' +
+          '<div class="ayuda">Toca la fecha, elige el módulo donde trabajó y usa "Cambiar integrantes". Si ese día no trabajó en Acabados, avisa a Christian para quitar sus horas.</div>';
+        caja.classList.add('visible');
+      })
+      .catch(() => {});
+  }
+  $('aviso-sin-modulo').addEventListener('click', ev => {
+    const b = ev.target.closest('.ir-fecha'); if (!b) return;
+    if ($('area').value !== b.dataset.area) { $('area').value = b.dataset.area; $('area').dispatchEvent(new Event('change')); }
+    $('fecha').value = b.dataset.fecha; $('fecha').dispatchEvent(new Event('change'));
+    $('integrantes-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  cargarSinModulo();
 
   // --- Bloques editables de colaborador dentro del módulo (código -> nombre detectado) ---
   function crearBloqueColaboradorMini(indice) {
