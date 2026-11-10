@@ -871,7 +871,7 @@ function pintarGrupos() {
       fila('% Eficiencia', d => `<td class="n${d.efic > 1 ? ' ambar' : ''}">${d.minAsist ? pc(d.efic) : ''}</td>`) +
       fila('% Incentivo', d => `<td class="n">${d.pct ? fmt(d.pct, 1) + ' %' : ''}</td>`) +
       fila('Prendas', d => `<td class="n">${fmt(d.prendas, 0)}</td>`) +
-      fila('Quién se contó', d => `<td class="gente">${d.personas.map(p => `<span class="${!p.minutos && d.minProd > 0 ? 'rojo' : ''}">${esc(p.nombre)} (${fmt((p.minutos || 0) / 60, 1)} h)</span>`).join('<br>')}</td>`) +
+      fila('Quién se contó', d => `<td class="gente">${d.personas.map(p => p.ausente ? `<span style="color:var(--taupe);font-style:italic">${esc(p.nombre)} (descanso médico, no cuenta)</span>` : `<span class="${!p.minutos && d.minProd > 0 ? 'rojo' : ''}">${esc(p.nombre)} (${fmt((p.minutos || 0) / 60, 1)} h)</span>`).join('<br>')}</td>`) +
       '</table></div>';
   }).join('') || '<p class="ayuda">No hay módulos para ese filtro.</p>';
 }

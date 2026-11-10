@@ -602,6 +602,24 @@ html[data-tema="oscuro"] #lsCarga img{filter:invert(1)!important;opacity:.9!impo
   .aviso-sin-modulo li { margin: 2px 0; }
   .aviso-sin-modulo .ir-fecha { background: none; border: none; padding: 0 2px; color: var(--aviso); font-weight: bold; text-decoration: underline; cursor: pointer; font-size: 13px; }
   .aviso-sin-modulo .ayuda { font-size: 12px; opacity: .85; }
+  /* 10-nov-2026: ausencias (descanso médico): la persona marcada queda con 0 minutos y 0 incentivo ese día y no cuenta en su módulo */
+  details.aus-box > summary { cursor: pointer; font-weight: bold; color: var(--petroleo); font-size: 14px; }
+  details.aus-box[open] > summary { margin-bottom: 10px; }
+  .aus-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; }
+  .aus-form .campo-aus { display: flex; flex-direction: column; gap: 3px; min-width: 130px; flex: 1 1 130px; }
+  .aus-form .campo-aus.persona { flex: 2 1 220px; }
+  .aus-form label { font-size: 12px; color: var(--gris); }
+  .aus-form select, .aus-form input[type=date] { font-size: 14px; padding: 8px 6px; border: 1px solid #d8dede; border-radius: 6px; width: 100%; box-sizing: border-box; }
+  .aus-form button { background: var(--esmeralda); color: #fff; border: none; border-radius: 6px; padding: 9px 14px; font-size: 14px; font-weight: bold; cursor: pointer; white-space: nowrap; }
+  .aus-form button:disabled { opacity: .6; cursor: default; }
+  #aus-msg { font-size: 13px; margin: 8px 0 0; min-height: 0; }
+  #aus-msg.ok { color: var(--petroleo); font-weight: bold; }
+  #aus-msg.error { color: var(--alerta); font-weight: bold; }
+  #aus-lista { list-style: none; margin: 10px 0 0; padding: 0; font-size: 13px; }
+  #aus-lista li { padding: 5px 0; border-top: 1px solid #e6ecea; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+  #aus-lista .quitar-aus { background: none; border: 1px solid var(--alerta); color: var(--alerta); border-radius: 12px; font-size: 12px; padding: 1px 8px; cursor: pointer; }
+  #aus-lista .vacio { color: var(--gris); border-top: none; }
+  .aviso-sin-modulo .marcar-dm { background: none; border: none; padding: 0 2px; color: var(--aviso); font-weight: bold; text-decoration: underline; cursor: pointer; font-size: 13px; }
   .integrantes-box .label { font-size: 12px; color: var(--gris); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
   .link-editar {
     background: none; border: none; color: var(--esmeralda);
@@ -857,6 +875,20 @@ html[data-tema="oscuro"] #lsCarga img{filter:invert(1)!important;opacity:.9!impo
     <button type="button" id="btn-guardar-integrantes" class="agregar-colaborador" style="display:none">Guardar esta asignación</button>
   </div>
   <div class="aviso-sin-modulo" id="aviso-sin-modulo" role="alert"></div>
+  <div class="aviso-sin-modulo" id="aviso-sin-marca" role="alert"></div>
+  <details class="integrantes-box visible aus-box" id="ausencias-box">
+    <summary>🩺 Descanso médico (persona que no vino) <span id="aus-cuenta" style="font-weight:normal;color:var(--gris)"></span></summary>
+    <div class="aus-form">
+      <div class="campo-aus persona"><label for="aus-persona">Persona</label><select id="aus-persona"><option value="">Cargando…</option></select></div>
+      <div class="campo-aus"><label for="aus-desde">Desde</label><input type="date" id="aus-desde"></div>
+      <div class="campo-aus"><label for="aus-hasta">Hasta</label><input type="date" id="aus-hasta"></div>
+      <div class="campo-aus"><label for="aus-motivo">Motivo</label><select id="aus-motivo"><option value="DM">Descanso médico</option></select></div>
+      <button type="button" id="aus-marcar">Marcar</button>
+    </div>
+    <div id="aus-msg" role="status"></div>
+    <ul id="aus-lista"></ul>
+    <div class="ayuda" style="font-size:12px;color:var(--gris);margin-top:8px">Ese día la persona queda con 0 minutos y sin incentivo, y no cuenta como integrante de su módulo: no baja la eficiencia de sus compañeros. Sus horas de HO no se borran.</div>
+  </details>
 
   <nav class="tabs">
     <button data-tab="produccion" type="button">↓ Producción</button>
@@ -1158,6 +1190,7 @@ html[data-tema="oscuro"] #lsCarga img{filter:invert(1)!important;opacity:.9!impo
         modulosPorArea = data.modulos || {};
         stdTabla = data.std || [];
         poblarClientesRechazo();
+        poblarAusPersonas();
         fechaInicioSemana = data.fechaInicio || '';
         semanaReferencia = data.semana || null;
         actualizarSemanaPorFecha(); // 13-ago-2026: la semana ya no se escribe a mano, se calcula sola desde la fecha
@@ -1351,6 +1384,96 @@ html[data-tema="oscuro"] #lsCarga img{filter:invert(1)!important;opacity:.9!impo
     $('integrantes-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
   cargarSinModulo();
+
+  // --- 10-nov-2026: ausencias (descanso médico) ---
+  // La marca es por persona y día (acabados_ausencias): ese día minutos = 0, sin incentivo, y no cuenta en el módulo.
+  const escAus = s => String(s == null ? '' : s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const dmAus = f => String(f).slice(8, 10) + '/' + String(f).slice(5, 7);
+  function poblarAusPersonas() {
+    const orden = { DOBLADO: 1, PLANCHA: 2, VAPOR: 3 };
+    const lista = Object.keys(trabajadores).map(c => ({ c, t: trabajadores[c] }))
+      .filter(x => x.t.area && x.t.area !== 'ENCAJADO')
+      .sort((a, b) => ((orden[a.t.area] || 9) - (orden[b.t.area] || 9)) || String(a.t.nombre).localeCompare(String(b.t.nombre)));
+    const sel = $('aus-persona'), previa = sel.value;
+    sel.innerHTML = '<option value="">— Elige a la persona —</option>' +
+      lista.map(x => `<option value="${escAus(x.c)}">${escAus(x.t.nombre)} · ${escAus(x.t.area)}</option>`).join('');
+    if (previa) sel.value = previa;
+  }
+  function fechaFormulario() { return ($('fecha') && $('fecha').value) || new Date().toISOString().slice(0, 10); }
+  function abrirAusencias(codigo, fecha) {
+    $('ausencias-box').open = true;
+    if (codigo) $('aus-persona').value = codigo;
+    $('aus-desde').value = fecha || $('aus-desde').value || fechaFormulario();
+    $('aus-hasta').value = fecha || $('aus-hasta').value || $('aus-desde').value;
+    $('ausencias-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  function msgAus(txt, clase) { const m = $('aus-msg'); m.textContent = txt || ''; m.className = clase || ''; }
+  function cargarAusencias() {
+    apiFetch(URL_APPS_SCRIPT + '?accion=ausenciasListar').then(r => r.json()).then(res => {
+      if (!res || res.ok === false) return;
+      const mot = $('aus-motivo');
+      if (res.motivos && res.motivos.length) mot.innerHTML = res.motivos.map(m => `<option value="${escAus(m.codigo)}">${escAus(m.nombre)}</option>`).join('');
+      const por = {};
+      (res.ausencias || []).forEach(a => { (por[a.codigo] = por[a.codigo] || { nombre: a.nombre, area: a.area, dias: [] }).dias.push(a); });
+      const filas = Object.keys(por).map(c => {
+        const p = por[c];
+        const dias = p.dias.map(d => `<span>${dmAus(d.fecha)} <button type="button" class="quitar-aus" data-cod="${escAus(c)}" data-fecha="${escAus(d.fecha)}" title="Quitar esta marca">✕ Quitar</button></span>`).join(' ');
+        return `<li><b>${escAus(p.nombre)}</b> · ${escAus(p.area)} · ${escAus(p.dias[0].motivo)}: ${dias}</li>`;
+      });
+      $('aus-lista').innerHTML = filas.length ? filas.join('') : '<li class="vacio">Sin ausencias marcadas en la semana abierta.</li>';
+      $('aus-cuenta').textContent = filas.length ? '· ' + filas.length + (filas.length === 1 ? ' persona marcada' : ' personas marcadas') : '';
+    }).catch(() => {});
+  }
+  function cargarSinMarca() {
+    const caja = $('aviso-sin-marca');
+    apiFetch(URL_APPS_SCRIPT + '?accion=horasSinMarca').then(r => r.json()).then(res => {
+      const casos = (res && res.ok && res.casos) || [];
+      if (!casos.length) { caja.classList.remove('visible'); caja.innerHTML = ''; return; }
+      const items = casos.map(c => `<li><b>${escAus(c.nombre)}</b> · ${escAus(c.area)} · ${dmAus(c.fecha)} · ${c.horas} h <button type="button" class="marcar-dm" data-cod="${escAus(c.codigo)}" data-fecha="${escAus(c.fecha)}">Marcar descanso médico</button></li>`).join('');
+      caja.innerHTML = '<b class="tit">⚠ Con horas, pero su módulo no tiene producción ese día</b><ul>' + items + '</ul>' +
+        '<div class="ayuda">Si la persona no vino (descanso médico), márcala: así no le cuenta incentivo ni perjudica a su módulo. Si sí trabajó, falta digitar la producción.</div>';
+      caja.classList.add('visible');
+    }).catch(() => {});
+  }
+  function refrescarAusencias() { cargarAusencias(); cargarSinMarca(); cargarSinModulo(); }
+  $('aviso-sin-marca').addEventListener('click', ev => {
+    const b = ev.target.closest('.marcar-dm'); if (!b) return;
+    abrirAusencias(b.dataset.cod, b.dataset.fecha);
+  });
+  $('ausencias-box').addEventListener('toggle', () => {
+    if ($('ausencias-box').open && !$('aus-desde').value) { $('aus-desde').value = fechaFormulario(); $('aus-hasta').value = $('aus-desde').value; }
+  });
+  $('aus-desde').addEventListener('change', () => { if (!$('aus-hasta').value || $('aus-hasta').value < $('aus-desde').value) $('aus-hasta').value = $('aus-desde').value; });
+  $('aus-marcar').addEventListener('click', () => {
+    const cod = $('aus-persona').value, desde = $('aus-desde').value, hasta = $('aus-hasta').value || desde;
+    if (!cod) { msgAus('Elige a la persona.', 'error'); return; }
+    if (!desde) { msgAus('Pon la fecha "Desde".', 'error'); return; }
+    if (hasta < desde) { msgAus('"Hasta" no puede ser anterior a "Desde".', 'error'); return; }
+    const btn = $('aus-marcar'); btn.disabled = true; msgAus('Guardando…');
+    apiFetch(URL_APPS_SCRIPT, { method: 'POST', body: JSON.stringify({ tipo: 'ausenciaMarcar', codigo: cod, desde, hasta, motivo: $('aus-motivo').value }) })
+      .then(r => r.json())
+      .then(res => {
+        if (res && res.ok) {
+          const nom = (trabajadores[cod] || {}).nombre || '';
+          msgAus('Listo: ' + nom + ' quedó marcada ' + res.dias + (res.dias === 1 ? ' día' : ' días') + '. Toca 🔍 Buscar para ver el módulo recalculado.', 'ok');
+          $('aus-persona').value = '';
+          refrescarAusencias();
+        } else { msgAus((res && res.error) || 'No se pudo guardar.', 'error'); }
+      })
+      .catch(() => msgAus('No se pudo conectar. Intenta de nuevo.', 'error'))
+      .finally(() => { btn.disabled = false; });
+  });
+  $('aus-lista').addEventListener('click', ev => {
+    const b = ev.target.closest('.quitar-aus'); if (!b) return;
+    const nom = (trabajadores[b.dataset.cod] || {}).nombre || '';
+    if (!confirm('¿Quitar la marca de ' + nom + ' del ' + dmAus(b.dataset.fecha) + '? Volverá a contar sus horas.')) return;
+    b.disabled = true;
+    apiFetch(URL_APPS_SCRIPT, { method: 'POST', body: JSON.stringify({ tipo: 'ausenciaQuitar', codigo: b.dataset.cod, desde: b.dataset.fecha, hasta: b.dataset.fecha }) })
+      .then(r => r.json())
+      .then(res => { if (res && res.ok) { msgAus('Marca quitada.', 'ok'); refrescarAusencias(); } else { b.disabled = false; msgAus((res && res.error) || 'No se pudo quitar.', 'error'); } })
+      .catch(() => { b.disabled = false; msgAus('No se pudo conectar. Intenta de nuevo.', 'error'); });
+  });
+  cargarAusencias(); cargarSinMarca();
 
   // --- Bloques editables de colaborador dentro del módulo (código -> nombre detectado) ---
   function crearBloqueColaboradorMini(indice) {
