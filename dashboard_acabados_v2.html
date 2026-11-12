@@ -1406,6 +1406,14 @@ function renderHistorico(data) {
   let gMp = 0, gDen = 0;
   areasActivas.forEach(a => { const b = byArea[a]; gMp += b.mprod; gDen += b.masist - b.improd; });
   const effGeneral = gDen > 0 ? gMp / gDen : 0;
+  // 12-nov-2026: la pestaña Reporte calcula su eficiencia ponderada con
+  // window._pondArea, que antes solo se llenaba al cargar la semana en vivo. Al
+  // abrir una semana cerrada se quedaba con los minutos de la semana actual y
+  // el Reporte mostraba otra cifra que el KPI (semana 45: 66% arriba y 10% en
+  // Reporte). Aquí se llena con los mismos acumulados del KPI de esta semana;
+  // el apoyo ya viene sumado dentro de masist, por eso ap va en 0.
+  window._pondArea = {};
+  AREAS.forEach(a => { const b = byArea[a]; window._pondArea[a] = { mp: b.mprod, ma: b.masist, im: b.improd, ap: 0 }; });
   const nOper = rows.filter(r => r.efsem > 0 || r.mprod > 0 || r.pdas > 0).length;
   const gruposUnicos = [...new Set(rows.map(r => r.grupo).filter(Boolean))];
   let totProd = 0, totRech = 0;
@@ -1804,6 +1812,22 @@ function renderPanelCambios(rowsVisibles){
     </div>`;
 }
 
+// 12-nov-2026: SOLO en la pestaña Reporte, sección Doblado, las prendas van en
+// 3 columnas (producción, rechazo y total) para que se vea de dónde sale el
+// total. El detalle normal sigue con una sola columna "Prendas total".
+// En semanas sin el dato de rechazo (29 a 37) la columna sale "—".
+// El total es el mismo número de siempre (producción + rechazo).
+const CABECERAS_PRENDAS=['Prendas producción','Prendas rechazo','Prendas total'];
+function celdasPrendas(area,grupo,prod){
+  const m=window._rechPdasPorGrupo||{};
+  const rech=m[grupo];
+  const hay=area==='DOBLADO'&&rech!=null;
+  const p=prod||0, tot=p+(rech||0);
+  return `<td class="num">${p.toLocaleString('es-PE')}</td>`
+    + (hay?`<td class="num">${rech.toLocaleString('es-PE')}</td>`:'<td class="num" style="color:#bbb">—</td>')
+    + `<td class="num" style="font-weight:bold">${tot.toLocaleString('es-PE')}</td>`;
+}
+
 function fillTable(area){
   const rows=window._rows.filter(r=>area==='TODAS'||r.area===area)
     .sort((a,b)=> a.area.localeCompare(b.area)
@@ -2078,7 +2102,11 @@ function renderVistaReporte() {
   // dashboard nunca muestren dos numeros distintos (antes salian 70% y 69%).
   const pa = window._pondArea;
   let gMp = 0, gDen = 0;
-  if (pa) areasActivas.forEach(a => { const t = pa[a]; if (t) { gMp += t.mp; gDen += t.ma + t.ap - t.im; } });
+  // 12-nov-2026: mismo criterio que el KPI de arriba: solo cuentan las áreas que
+  // ya tienen producción (mp > 0). Antes aquí entraban también los minutos de
+  // áreas con gente asistiendo pero sin producción digitada todavía, y el
+  // Reporte salía más bajo que el KPI (semana en curso: 20% arriba, 10% aquí).
+  if (pa) AREAS.forEach(a => { const t = pa[a]; if (t && t.mp > 0) { gMp += t.mp; gDen += t.ma + t.ap - t.im; } });
   const effGeneral = gDen > 0 ? gMp / gDen : 0;
 
   const SECCIONES = [
@@ -2098,7 +2126,7 @@ function renderVistaReporte() {
     const conRechazo = sec.area === 'DOBLADO';
     const headCols = sec.individual
       ? ['Trabajador', 'Área', '% Efic Sem', 'Prendas total']
-      : ['Módulo/Pareja', 'Área', 'Integrantes', '% Efic Sem', 'Prendas total'].concat(conRechazo ? ['% Rechazo Audit.'] : []);
+      : ['Módulo/Pareja', 'Área', 'Integrantes', '% Efic Sem'].concat(conRechazo ? CABECERAS_PRENDAS.concat(['% Rechazo Audit.']) : ['Prendas total']);
     const filas = grupos.map(g => {
       const cs = effColor(g.efMod);
       const rechazoCell = conRechazo
@@ -2117,7 +2145,7 @@ function renderVistaReporte() {
         <td><span class="tag" style="background:${areaColor(g.area)}">${g.area}</span></td>
         <td>${g.integrantes.join(' · ')}</td>
         <td class="num eff" style="background:${cs.bg};color:${cs.fg}">${(g.efMod * 100).toFixed(0)}%</td>
-        <td class="num">${(g.pdas + g.rechPdas).toLocaleString('es-PE')}</td>
+        ${conRechazo ? celdasPrendas(g.area, g.grupo, g.pdas) : `<td class="num">${(g.pdas + g.rechPdas).toLocaleString('es-PE')}</td>`}
         ${rechazoCell}
       </tr>`;
     }).join('');
