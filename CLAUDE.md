@@ -25,7 +25,7 @@ Una sola puerta: `acabados_api(p_accion, p)`, responde JSON. Es el contrato que 
 - Auditoría de cambios: `acabados_bitacora`, `acabados_papelera`.
 - Cálculo: `acabados_calc_modulos` y `acabados_calc_personas` (semana abierta). Eficiencia = Min Prod ÷ (Min Asist + Apoyo − Improductivos), ponderada.
 - Semana cerrada en el dashboard: `acabados_dashboard_historico_`. Desde el 12/11/2026 devuelve en `grupos` el dato `rech` (prendas de rechazo de auditoría de esa semana, sumadas de `acabados_auditoria_dob`) y las suma por día en `prendasPorModuloDia`, para que "Prendas totales" salga producidas + rechazadas igual que en la semana abierta. Las semanas 29 a 37 no tienen filas de rechazo: `rech` va null y salen solo las producidas. Registro: `A17 acabados prendas rechazadas semana cerrada.sql`.
-- Excel: `acabados_exportar_` (incluye `acabados_resumen_mensual_` y `acabados_min_prod_semanal_`).
+- Excel: `acabados_exportar_` (desde el 23/11/2026, registro `A18`: cada fila de producción trae el estilo en la 4.ª posición y la subcategoría de Plancha al final; la hoja REGISTROS las muestra en dos columnas, "Estilo" y "Subcat.", antes Plancha solo mostraba la subcategoría) (incluye `acabados_resumen_mensual_` y `acabados_min_prod_semanal_`).
 - Semanas 29 a 37 vienen del Sheet antiguo: solo queda lo archivado. Las semanas 29 a 35 no guardaron el apoyo.
 - Semana 36: se cerró dos veces en el Sheet y la carga tomó la copia en ceros; se recuperó del primer cierre el 21/10/2026.
 

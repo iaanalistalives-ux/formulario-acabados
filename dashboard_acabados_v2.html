@@ -1165,10 +1165,13 @@ async function exportarExcelAcabados(d) {
     });
     f += 2;
   }
-  seccion('PRODUCCIÓN POR MÓDULO', ['Fecha', 'Área', 'Módulo', 'Estilo/Subcat.', 'Cantidad', 'STD', 'Min Prod', 'Improd (min)', 'Apoyo (min)'], d.registros.produccion || [], 0);
+  /* 23/11/2026 (A18): la base manda el estilo en la 4.ª posición y la subcategoría de Plancha al final;
+     aquí se ponen en dos columnas, Estilo y Subcat. (antes Plancha mostraba solo la subcategoría). */
+  const prodReg = (d.registros.produccion || []).map(x => x.length > 9 ? x.slice(0, 4).concat([x[9]], x.slice(4, 9)) : x.slice(0, 4).concat([''], x.slice(4)));
+  seccion('PRODUCCIÓN POR MÓDULO', ['Fecha', 'Área', 'Módulo', 'Estilo', 'Subcat.', 'Cantidad', 'STD', 'Min Prod', 'Improd (min)', 'Apoyo (min)'], prodReg, 0);
   seccion('SISTEMA DOB (incentivos sistema)', ['Fecha', 'Módulo', 'Estilo', 'Cantidad', 'STD', 'Min Prod'], d.registros.sistema || [], 0);
   seccion('RECHAZO DE AUDITORÍA', ['Fecha', 'Módulo', 'Cliente', 'Prendas Rechazadas', 'STD', 'Min Rework', 'Min Improd', 'Apoyo Módulo'], d.registros.auditoria || [], 0);
-  xlAutoAncho(r, 9);
+  xlAutoAncho(r, 10);
 
   // ---------- MENSUAL_ANUAL ----------
   const M = d.mensual;
